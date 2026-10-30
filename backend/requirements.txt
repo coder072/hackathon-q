@@ -1,0 +1,5 @@
+fastapi[standard]>=0.115
+pydantic>=2.12
+pydantic-settings>=2.6
+sqlalchemy>=2.0.36
+python-ulid>=3.0
