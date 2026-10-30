@@ -137,7 +137,8 @@ IP는 `X-Forwarded-For` 의 첫 번째 값 기준이다 (Vite 프록시·터널�
 
 - 의도 분류는 `backend/.env` 에 `OPENAI_API_KEY`(팩트챗 키)가 있으면 팩트챗 게이트웨이(OpenAI 호환, `INTENT_MODEL` 기본 OpenAI `gpt-5.4`)로, 없거나 실패(크레딧 부족 등)·5초 초과 시 규칙 기반으로 한다. `.env` 는 `cp .env.example .env` 로 만들고 키를 넣은 뒤 `docker compose up -d` 로 컨테이너를 다시 만든다 (`restart` 는 `.env` 를 다시 읽지 않는다). OpenAI 키를 직접 쓰려면 `OPENAI_BASE_URL=` 을 비우고 OpenAI 모델 이름을 `INTENT_MODEL` 에 넣는다.
 - LLM 은 카탈로그의 `serviceKey`·`intentCode` 중에서만 고른다(구조화 출력). URL 은 `app/catalog/official_sites.json` 에서만 나오고, 모든 URL 이 허용 목록 도메인인지 테스트로 확인한다.
-- 의도를 알 수 없거나 후보가 없어도 오류가 아닌 `200` + `NEEDS_CLARIFICATION`/`NOT_FOUND` 로 응답한다(원래 링크 차단 유지).
+- **질문은 한 번으로 끝낸다.** 사용자 목적 + 분석 요약(흉내 낸 서비스 포함) + 공식 사이트 목록(ID)을 한 프롬프트로 넘기고, AI 가 가장 알맞은 사이트 ID 를 최대 3개 고른다. 서버는 카탈로그에 있는 ID 만 URL 로 바꾼다.
+- AI 가 실패하면 규칙으로 고른다: 서비스 → 행동별 대표 서비스(예: 배송 조회 → 우체국·CJ대한통운·한진) → QR 이 흉내 낸 서비스. 그래도 없으면 `NOT_FOUND`(원래 링크 차단 유지). `NEEDS_CLARIFICATION` 은 보내지 않는다.
 - 민감정보(비밀번호·인증번호·계좌·주민번호·카드번호)는 LLM 에 보내기 전에 `422 SENSITIVE_DATA_DETECTED`. 사용자 원문은 저장·로그하지 않는다.
 - 테스트는 가짜 분류기·가짜 클라이언트로 실행한다(실제 API 호출 없음). openai SDK 는 `httpx2` 를 써서 `respx` 로는 가로챌 수 없다.
 
