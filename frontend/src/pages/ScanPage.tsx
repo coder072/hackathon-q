@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import closeIcon from '../assets/scan/close.svg'
 import scanCorners from '../assets/scan/scan-corners.svg'
@@ -6,6 +6,9 @@ import { ManualUrlForm } from '../components/ManualUrlForm'
 import { useQrScanner, type ScannerError } from '../hooks/useQrScanner'
 import { isHttpUrl } from '../lib/verdict'
 import { useScanFlow } from '../state/useScanFlow'
+
+// QR 을 찾은 뒤 프레임이 줄어드는 애니메이션을 보여 주는 시간
+const LOCK_ANIMATION_MS = 450
 
 const FAILURE_BODY: Record<ScannerError, string> = {
   PERMISSION_DENIED: '브라우저 설정에서 카메라 권한을 허용하고\n다시 시도해 주세요.',
@@ -64,6 +67,11 @@ export function ScanPage() {
   const [attempt, setAttempt] = useState(0)
   // 닫기로 안내 카드를 내린 시도 (다시 시도하면 새 시도라 다시 보인다)
   const [dismissedAttempt, setDismissedAttempt] = useState<number | null>(null)
+  // QR 을 찾은 순간: 프레임이 줄어드는 애니메이션을 보여 준 뒤 다음 단계로 넘어간다
+  const [locked, setLocked] = useState(false)
+  const lockTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+
+  useEffect(() => () => clearTimeout(lockTimer.current), [])
 
   const analyze = (url: string) => {
     setScannedUrl(url)
@@ -71,6 +79,8 @@ export function ScanPage() {
   }
 
   const restart = () => {
+    clearTimeout(lockTimer.current)
+    setLocked(false)
     setNonUrlText(null)
     setDismissedAttempt(null)
     setAttempt((n) => n + 1)
@@ -80,12 +90,13 @@ export function ScanPage() {
     enabled: nonUrlText === null,
     restartKey: attempt,
     onDecode: (text) => {
-      // QR-006: URL 이 아니면 분석하지 않고 내용만 표시
-      if (!isHttpUrl(text)) {
-        setNonUrlText(text)
-        return
-      }
-      analyze(text.trim())
+      setLocked(true)
+      lockTimer.current = setTimeout(() => {
+        setLocked(false)
+        // QR-006: URL 이 아니면 분석하지 않고 내용만 표시
+        if (!isHttpUrl(text)) setNonUrlText(text)
+        else analyze(text.trim())
+      }, LOCK_ANIMATION_MS)
     },
   })
 
@@ -107,10 +118,27 @@ export function ScanPage() {
 
       <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-2.5 py-6">
         <p className="text-center text-[13.699px] font-medium" role="status">
-          {failed ? '카메라와 QR 코드를 확인해주세요.' : ready ? 'QR 코드에 카메라를 맞춰주세요.' : '카메라를 준비하고 있어요.'}
+          {failed
+            ? '카메라와 QR 코드를 확인해주세요.'
+            : locked
+              ? 'QR 코드를 찾았어요.'
+              : ready
+                ? 'QR 코드에 카메라를 맞춰주세요.'
+                : '카메라를 준비하고 있어요.'}
         </p>
         <div className="relative flex size-[298px] items-center justify-center">
-          <img src={scanCorners} alt="" className="pointer-events-none absolute top-1/2 left-1/2 -translate-1/2" />
+          {/* 카메라가 켜지면 커지고, QR 을 찾으면 살짝 줄어들며 잡히는 느낌을 준다 */}
+          <img
+            src={scanCorners}
+            alt=""
+            className={`pointer-events-none absolute top-1/2 left-1/2 -translate-1/2 transition-[scale] motion-reduce:transition-none ${
+              locked
+                ? 'scale-95 duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]'
+                : ready && !failed
+                  ? 'scale-[1.04] duration-500 ease-out'
+                  : 'scale-100 duration-300 ease-out'
+            }`}
+          />
           {cardOpen && error !== null && (
             <ScanCard title={'QR 코드를\n인식하지 못했어요'} primaryLabel="다시 시도" onPrimary={restart} onClose={() => setDismissedAttempt(attempt)}>
               <p className="w-full text-[13px] leading-[1.6] whitespace-pre-line text-[#f7f8f6]">{FAILURE_BODY[error]}</p>
