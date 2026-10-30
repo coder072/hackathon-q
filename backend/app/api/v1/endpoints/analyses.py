@@ -1,6 +1,7 @@
 import logging
 import re
 from datetime import UTC, datetime, timedelta
+from functools import lru_cache
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Request, Response
@@ -14,6 +15,7 @@ from app.schemas.analysis import AnalysisRequest, AnalysisResult, RecommendedAct
 from app.schemas.common import ApiResponse
 from app.services.analyses import sessions as analysis_sessions
 from app.services.analyses.analyzer import Resolver, analyze_url, resolve_host
+from app.services.analyses.rdap import DomainLookup, RdapClient
 from app.services.analyses.rules import load_catalog
 
 logger = logging.getLogger(__name__)
@@ -25,6 +27,12 @@ ANALYSIS_ID = re.compile(r"ana_[0-9A-HJKMNP-TV-Z]{26}")
 
 def get_resolver() -> Resolver:
     return resolve_host
+
+
+@lru_cache
+def get_domain_lookup() -> DomainLookup:
+    # RDAP 서버 목록을 앱 실행 중 한 번만 받도록 같은 클라이언트를 쓴다
+    return RdapClient(get_settings().rdap_timeout_seconds).registered_at
 
 
 def decide(score: int) -> tuple[Verdict, RecommendedAction]:
@@ -49,6 +57,7 @@ async def create_analysis(
     db: DbSession,
     settings: AppSettings,
     resolve: Annotated[Resolver, Depends(get_resolver)],
+    lookup: Annotated[DomainLookup, Depends(get_domain_lookup)],
 ) -> ApiResponse[AnalysisResult]:
     response.headers["Cache-Control"] = "no-store"
     request_id = request.state.request_id
@@ -66,6 +75,7 @@ async def create_analysis(
             catalog=load_catalog(),
             max_redirects=settings.max_redirects,
             timeout=settings.analysis_timeout_seconds,
+            lookup=lookup,
         )
     except AppError:
         raise

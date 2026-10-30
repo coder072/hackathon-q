@@ -7,6 +7,7 @@ from app.services.analyses.rules import (
     load_catalog,
     registrable_domain,
     structure_issue,
+    suspicious_tld,
 )
 
 
@@ -76,3 +77,17 @@ def test_registrable_domain(host, expected):
 )
 def test_structure_issue(url, flagged):
     assert (structure_issue([normalize_url(url)], load_catalog()) is not None) is flagged
+
+
+@pytest.mark.parametrize(
+    ("host", "tld"),
+    [
+        ("event-gift.shop", "shop"),
+        ("a.b.example.xyz", "xyz"),
+        ("example.com", None),
+        ("www.epost.go.kr", None),
+        ("1.2.3.4", None),
+    ],
+)
+def test_suspicious_tld(host, tld):
+    assert suspicious_tld(host, load_catalog()) == tld

@@ -19,6 +19,8 @@ SCORES = {
     CheckCode.SUSPICIOUS_URL_STRUCTURE: 1,
     CheckCode.DIRECT_IP_ACCESS: 3,
     CheckCode.EXCESSIVE_REDIRECTS: 1,
+    CheckCode.NEW_DOMAIN: 2,
+    CheckCode.SUSPICIOUS_TLD: 1,
     CheckCode.BLOCKLIST_MATCH: 10,
     CheckCode.ALLOWLIST_MATCH: 0,
 }
@@ -30,6 +32,8 @@ SUSPICIOUS_MIN_SCORE = 4
 EXCESSIVE_REDIRECT_COUNT = 3
 LONG_URL_LENGTH = 150
 MAX_SUBDOMAIN_DEPTH = 3
+# 등록된 지 이 일수 미만이면 NEW_DOMAIN
+NEW_DOMAIN_DAYS = 30
 SUSPICIOUS_KEYWORDS = (
     "login", "signin", "logon", "verify", "verification", "secure", "account", "update",
     "confirm", "password", "wallet", "banking", "auth", "unlock", "suspend",
@@ -53,6 +57,7 @@ class UrlCatalog:
     allowlist: tuple[str, ...]
     shorteners: tuple[str, ...]
     brands: tuple[Brand, ...]
+    suspicious_tlds: tuple[str, ...]
 
 
 def _load_json(name: str):
@@ -70,6 +75,7 @@ def load_catalog() -> UrlCatalog:
             Brand(keyword=b["keyword"], domains=tuple(b["domains"]))
             for b in _load_json("brands.json")
         ),
+        suspicious_tlds=tuple(_load_json("suspicious_tlds.json")["tlds"]),
     )
 
 
@@ -110,6 +116,14 @@ def find_lookalike_brand(host: str, catalog: UrlCatalog) -> str | None:
     return None
 
 
+def suspicious_tld(host: str, catalog: UrlCatalog) -> str | None:
+    """피싱에 자주 쓰이는 TLD 면 그 TLD 를 반환한다. IP·공식 도메인은 검사하지 않는다."""
+    if is_ip_address(host) or matches_domain(host, catalog.allowlist):
+        return None
+    tld = _extract(host).suffix.rsplit(".", 1)[-1]
+    return tld if tld in catalog.suspicious_tlds else None
+
+
 def structure_issue(hops: list[ParsedUrl], catalog: UrlCatalog) -> str | None:
     """URL 길이·하위 도메인·특수 표기·의심 키워드 중 처음 발견된 문제를 반환한다 (URL-006)."""
     final = hops[-1]
@@ -138,16 +152,36 @@ def _check(code: CheckCode, detected: bool, message: str) -> CheckResult:
     )
 
 
+def _domain_age_message(final: ParsedUrl, allowlisted: bool, age_days: int | None) -> str:
+    if final.is_ip:
+        return "IP 주소라 도메인 생성일을 확인하지 않습니다."
+    if allowlisted:
+        return "검증된 공식 도메인이라 생성일을 확인하지 않습니다."
+    if age_days is None:
+        return "도메인 생성일을 확인하지 못했습니다."
+    if age_days < NEW_DOMAIN_DAYS:
+        return f"생성된 지 {age_days}일 된 신규 도메인입니다."
+    return f"생성된 지 {age_days}일이 지난 도메인입니다."
+
+
 def evaluate(
-    hops: list[ParsedUrl], blocked: bool, catalog: UrlCatalog, unreachable: bool = False
+    hops: list[ParsedUrl],
+    blocked: bool,
+    catalog: UrlCatalog,
+    unreachable: bool = False,
+    domain_age_days: int | None = None,
 ) -> list[CheckResult]:
-    """unreachable: 대상 서버에 접속하지 못해 리디렉션을 끝까지 확인하지 못한 경우."""
+    """unreachable: 대상 서버에 접속하지 못해 리디렉션을 끝까지 확인하지 못한 경우.
+    domain_age_days: 최종 도메인이 등록된 뒤 지난 일수. 조회하지 않았거나 실패하면 None (#33).
+    """
     final = hops[-1]
     redirects = len(hops) - 1
     lookalike = find_lookalike_brand(final.host, catalog)
     structure = structure_issue(hops, catalog)
     direct_ip = any(hop.is_ip for hop in hops)
     allowlisted = matches_domain(final.host, catalog.allowlist)
+    tld = suspicious_tld(final.host, catalog)
+    new_domain = domain_age_days is not None and domain_age_days < NEW_DOMAIN_DAYS
 
     return [
         _check(
@@ -191,6 +225,18 @@ def evaluate(
             else "목적지 서버에 접속할 수 없어 리디렉션을 확인하지 못했습니다."
             if unreachable
             else f"리디렉션 {redirects}회로 정상 범위입니다.",
+        ),
+        _check(
+            CheckCode.NEW_DOMAIN,
+            new_domain,
+            _domain_age_message(final, allowlisted, domain_age_days),
+        ),
+        _check(
+            CheckCode.SUSPICIOUS_TLD,
+            tld is not None,
+            f"피싱에 자주 쓰이는 최상위 도메인(.{tld})입니다."
+            if tld
+            else "피싱에 자주 쓰이는 최상위 도메인이 아닙니다.",
         ),
         _check(
             CheckCode.ALLOWLIST_MATCH,

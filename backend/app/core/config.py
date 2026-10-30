@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     analysis_ttl_minutes: int = 20
     analysis_timeout_seconds: float = 5.0
     max_redirects: int = 5
+    # 도메인 등록일(RDAP) 조회 제한 시간. 넘기면 신규 도메인 신호 없이 판정한다
+    rdap_timeout_seconds: float = 2.5
 
     # 분석 세션은 영구 보관하고, 이 시간이 지나면 URL 쿼리·clientRequestId 를 지운다
     url_anonymize_after_hours: int = 24

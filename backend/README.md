@@ -79,7 +79,7 @@ backend/
     │       └── endpoints/  # health, analyses, intent_guidance
     ├── core/               # 설정, 오류 코드·핸들러, Request ID 미들웨어, ID 생성, 요청 제한(slowapi)
     ├── db/session.py       # SQLAlchemy 엔진/세션 (PostgreSQL, psycopg)
-    ├── catalog/            # 차단·허용 목록, 유명 서비스 도메인, 단축 URL 목록 (JSON)
+    ├── catalog/            # 차단·허용 목록, 유명 서비스 도메인, 단축 URL, 위험 TLD 목록 (JSON)
     ├── jobs/               # 24시간 지난 분석 세션 URL 익명화 (앱 실행 중 1시간마다)
     ├── models/             # SQLAlchemy 모델 (analysis_sessions)
     ├── schemas/            # 요청/응답 스키마 (CamelModel, ApiResponse[T])
@@ -88,6 +88,7 @@ backend/
         │   ├── parsing.py  # URL 정규화, IDNA (URL-001)
         │   ├── analyzer.py # DNS·SSRF 검사, 리디렉션 추적, 분석 흐름 (URL-003·004·009)
         │   ├── rules.py    # 위험 점수 규칙, 차단·허용 목록 (URL-002·005~008)
+        │   ├── rdap.py     # 도메인 생성일 조회 (RDAP)
         │   └── sessions.py # 분석 세션 저장·조회
         └── intent/         # POST /intent-guidance
             ├── assessment.py # QR 링크·의도 비교 판단 검증, 규칙 판단
@@ -117,15 +118,29 @@ IP는 `X-Forwarded-For` 의 첫 번째 값 기준이다 (Vite 프록시·터널�
 
 `정규화 → 차단 목록 → DNS 확인·SSRF 검사 → 검증한 IP로 접속 → 리디렉션이면 반복 → 점수 합산` 순서로 처리한다.
 
+| 검사 항목 | 점수 | 기준 |
+|---|---|---|
+| `BLOCKLIST_MATCH` | 10 (즉시 최고점) | `catalog/blocklist.json` |
+| `LOOKALIKE_DOMAIN` | 4 | 공식 도메인이 아닌데 `catalog/brands.json` 의 브랜드를 흉내 냄 |
+| `DIRECT_IP_ACCESS` | 3 | 한 단계라도 IP 주소로 접속 |
+| `NEW_DOMAIN` | 2 | 최종 도메인이 등록된 지 30일 미만 (RDAP) |
+| `HTTPS_NOT_USED` | 1 | 최종 주소가 HTTP |
+| `SUSPICIOUS_URL_STRUCTURE` | 1 | `@`, 150자 초과, `xn--`, 하위 도메인 3단계 이상, 하이픈 3개 이상, 의심 키워드 2개 이상 |
+| `SUSPICIOUS_TLD` | 1 | 최종 도메인이 `catalog/suspicious_tlds.json` 의 TLD (`.xyz`, `.top`, `.shop` 등) |
+| `EXCESSIVE_REDIRECTS` | 1 | 리디렉션 3회 이상 |
+
+합계 0~3 안전, 4~6 의도 확인, 7~10 차단. 공식 도메인(`allowlist.json`)은 유사 도메인·키워드·TLD·생성일 검사에서 제외한다.
+
 - 리디렉션은 자동으로 따라가지 않고 `httpx` 로 한 단계씩 직접 요청한다. 매 단계마다 DNS 결과의 모든 IP가 공인 주소인지 확인하고, 검증한 IP로 직접 접속한다 (Host 헤더·TLS SNI 는 원래 도메인이라 인증서 검사는 그대로 동작한다).
 - 최대 5회 리디렉션, 전체 5초 제한. 응답 본문은 읽지 않는다.
 - 대상 서버에 접속하지 못하면(응답 없음·연결 거부) 그때까지 확인한 주소로 점수를 매긴다. **4점 이상이면 피싱 의심으로 판정**하고, 4점 미만이면 안전으로 판정하지 않고 `ANALYSIS_TIMEOUT`/`ANALYSIS_FAILED` 로 응답한다.
 - 차단 목록에 걸리면 그 주소에는 접속하지 않고 즉시 10점 처리한다.
+- 도메인 생성일은 RDAP(WHOIS 의 JSON 표준)로 조회한다 (`app/services/analyses/rdap.py`). IANA 부트스트랩 목록에서 TLD 별 RDAP 서버를 찾고, 첫 주소의 도메인은 리디렉션 추적과 동시에 조회한다. 최종 도메인이 다르면 다시 조회한다. 조회 실패·`RDAP_TIMEOUT_SECONDS`(기본 2.5초) 초과·RDAP 미지원 TLD(`.io` 등)는 점수를 더하지 않는다. RDAP 서버에는 등록 도메인 이름만 보낸다.
 - 등록 도메인은 `tldextract`(내장 공개 접미사 목록, 네트워크 조회 없음), 국제화 도메인은 `idna`(IDNA 2008), 유사 도메인은 `rapidfuzz` 편집 거리로 판단한다.
 - 분석 결과는 `analysis_sessions` 에 저장된다. `expiresAt`(20분)은 `POST /intent-guidance` 같은 후속 행동의 유효 시간이고, `GET /analyses/{analysisId}` 조회는 기간 제한이 없다.
 - 분석 결과는 지우지 않고 영구 보관한다. 24시간이 지나면 URL 의 쿼리·프래그먼트와 `clientRequestId` 를 지운다 (`app/jobs/anonymize_sessions.py`, NFR-007). 도메인·경로·점수·판정·검사 결과는 남는다.
 - 차단·허용 목록은 관리자 API 없이 `app/catalog/*.json` 을 수정한다.
-- 테스트는 `respx` 로 HTTP 를 가로채고 DNS 는 가짜 Resolver 로 바꿔 네트워크 없이 실행한다.
+- 테스트는 `respx` 로 HTTP 를 가로채고 DNS·RDAP 는 가짜 Resolver·조회 함수로 바꿔 네트워크 없이 실행한다.
 
 ## 접속 의도 안내 (`POST /intent-guidance`)
 
