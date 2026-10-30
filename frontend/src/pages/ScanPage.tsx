@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
+import { ManualUrlForm } from '../components/ManualUrlForm'
 import { Button, ErrorView } from '../components/ui'
 import { useQrScanner } from '../hooks/useQrScanner'
 import { isHttpUrl } from '../lib/verdict'
@@ -12,6 +13,11 @@ export function ScanPage() {
   const [nonUrlText, setNonUrlText] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
 
+  const analyze = (url: string) => {
+    setScannedUrl(url)
+    navigate('/analyzing')
+  }
+
   const { videoRef, error, ready } = useQrScanner({
     enabled: nonUrlText === null,
     onDecode: (text) => {
@@ -20,8 +26,7 @@ export function ScanPage() {
         setNonUrlText(text)
         return
       }
-      setScannedUrl(text.trim())
-      navigate('/analyzing')
+      analyze(text.trim())
     },
   })
 
@@ -36,6 +41,7 @@ export function ScanPage() {
         }
       >
         <Button onClick={() => window.location.reload()}>다시 시도</Button>
+        <ManualUrlForm onSubmit={analyze} />
       </ErrorView>
     )
   }
@@ -72,6 +78,7 @@ export function ScanPage() {
         <br />
         카메라 영상은 서버로 전송되지 않습니다.
       </p>
+      <ManualUrlForm onSubmit={analyze} />
     </div>
   )
 }

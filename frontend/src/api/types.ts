@@ -9,8 +9,9 @@ export type CheckCode =
   | 'LOOKALIKE_DOMAIN'
   | 'SUSPICIOUS_URL_STRUCTURE'
   | 'DIRECT_IP_ACCESS'
-  | 'BLOCKLIST_MATCH'
   | 'EXCESSIVE_REDIRECTS'
+  // 명세 MVP 표에는 없지만 현재 백엔드가 함께 내려준다
+  | 'BLOCKLIST_MATCH'
   | 'ALLOWLIST_MATCH'
 
 export interface ApiSuccess<T> {
@@ -41,21 +42,17 @@ export type ErrorCode =
   | 'ANALYSIS_FAILED'
   | 'ANALYSIS_TIMEOUT'
   | 'ANALYSIS_NOT_FOUND'
-  | 'REPORT_ALREADY_EXISTS'
-  | 'INVALID_REPORT_REASON'
   | 'INVALID_INTENT_MESSAGE'
   | 'INTENT_GUIDANCE_NOT_ALLOWED'
   | 'SENSITIVE_DATA_DETECTED'
+  | 'INTENT_SERVICE_UNAVAILABLE'
   // 클라이언트 전용: 네트워크 단절, 응답 파싱 실패
   | 'NETWORK_ERROR'
   | 'UNKNOWN_ERROR'
 
 // POST /analyses
-export type ScanSource = 'CAMERA' | 'IMAGE'
-
 export interface AnalysisRequest {
   url: string
-  source: ScanSource
   clientRequestId?: string
 }
 
@@ -86,22 +83,14 @@ export interface IntentGuidanceRequest {
   userMessage: string
 }
 
+export type GuidanceStatus = 'MATCHED' | 'NEEDS_CLARIFICATION' | 'NOT_FOUND'
+
 export interface OfficialSiteSuggestion {
   name: string
   url: string
   domain: string
   reason: string
   verified: true
-}
-
-// 후보가 없거나 의도를 알 수 없어도 오류가 아닌 200 으로 오며, 원래 링크는 계속 차단한다
-export type GuidanceStatus = 'MATCHED' | 'NEEDS_CLARIFICATION' | 'NOT_FOUND'
-
-// QR 링크와 사용자 의도를 비교한 판단. 원래 링크를 열어도 된다는 결론은 주지 않는다
-export interface IntentAssessment {
-  matchesIntent: boolean | null
-  explanation: string
-  source: 'llm' | 'rules'
 }
 
 export interface IntentGuidance {
@@ -112,23 +101,7 @@ export interface IntentGuidance {
   serviceName: string | null
   confidence: number
   followUpQuestion: string | null
-  assessment: IntentAssessment
   suggestions: OfficialSiteSuggestion[]
-}
-
-// POST /reports
-export type ReportReason = 'SUSPICIOUS_LOGIN' | 'PAYMENT_REQUEST' | 'IMPERSONATION' | 'MALWARE' | 'OTHER'
-
-export interface ReportRequest {
-  analysisId: string
-  reason: ReportReason
-  description?: string
-}
-
-export interface ReportCreated {
-  reportId: string
-  status: 'PENDING' | 'BLOCKED' | 'SAFE'
-  createdAt: string
 }
 
 // GET /health

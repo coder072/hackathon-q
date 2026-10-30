@@ -13,9 +13,10 @@ const MESSAGES: Partial<Record<ErrorCode, string>> = {
   ANALYSIS_FAILED: '분석 중 오류가 발생했어요. 안전 여부를 확인하지 못했으니 링크를 열지 마세요.',
   ANALYSIS_TIMEOUT: '분석 시간이 초과됐어요. 다시 시도해 주세요.',
   ANALYSIS_NOT_FOUND: '분석 결과가 만료됐어요. QR을 다시 스캔해 주세요.',
-  INVALID_INTENT_MESSAGE: '접속 목적을 1~300자로 입력해 주세요.',
-  SENSITIVE_DATA_DETECTED: '비밀번호·인증번호·계좌번호 같은 민감정보는 지우고 다시 입력해 주세요.',
-  INTENT_GUIDANCE_NOT_ALLOWED: '이 결과에서는 목적 확인을 할 수 없어요. QR을 다시 스캔해 주세요.',
+  INVALID_INTENT_MESSAGE: '목적을 1~300자로 입력해 주세요.',
+  INTENT_GUIDANCE_NOT_ALLOWED: '이 결과에서는 공식 사이트 안내를 받을 수 없어요. 기존 판정을 따라 주세요.',
+  SENSITIVE_DATA_DETECTED: '비밀번호·인증번호·계좌번호 같은 민감한 정보가 포함돼 있어 입력을 지웠어요. 목적만 다시 적어 주세요.',
+  INTENT_SERVICE_UNAVAILABLE: '지금은 목적 확인을 할 수 없어요. 원래 링크는 계속 차단됩니다.',
 }
 
 export function errorMessage(err: unknown): string {

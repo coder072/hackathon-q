@@ -6,7 +6,76 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+html,
 body {
   margin: 0;
+  overflow-x: hidden;
   background: #020617;
+}
+
+/* 스크롤바가 두꺼워서 레이아웃을 옆으로 밀지 않도록 전체적으로 얇게 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+}
+
+/* 결과 화면 배경 그라데이션(불). 처음엔 확 타올랐다가(flare) 이후 아래-위로 계속 일렁임(drift) */
+@keyframes result-glow-flare {
+  0% {
+    transform: scale(0.35) translate3d(0, 35%, 0);
+    opacity: 0;
+  }
+  35% {
+    transform: scale(1.4) translate3d(0, -12%, 0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) translate3d(0, 0, 0);
+    opacity: 0.85;
+  }
+}
+
+@keyframes result-glow-drift {
+  0%,
+  100% {
+    transform: translate3d(-8%, 12%, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(6%, -16%, 0) scale(1.18);
+  }
+}
+
+.result-glow-wrap {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.result-glow {
+  position: absolute;
+  inset: -30% -15% -15% -15%;
+  filter: blur(36px) saturate(1.3);
+  animation:
+    result-glow-flare 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) 1 both,
+    result-glow-drift 7s ease-in-out 1.1s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .result-glow {
+    animation: none;
+  }
 }
