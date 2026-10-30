@@ -134,12 +134,13 @@ interface ResultScreenProps {
   onPrimaryAction: () => void
   onSecondaryAction: () => void
   secondaryLabel?: string
+  scoreCaption?: string
   children?: ReactNode
 }
 
 // SCR-003/004 결과 화면: 안전·주의·차단 공통 레이아웃 (Figma node 67:608 / 62:491 / 67:708 / 70:808)
 // 카드는 드래그로 올리고 내릴 수 있는 바텀시트: 내리면(collapsed) 뒤 그라데이션이 보이고, 올리면(expanded) 전체를 덮는다.
-export function ResultScreen({ analysis, tier, onBack, onClose, onPrimaryAction, onSecondaryAction, secondaryLabel, children }: ResultScreenProps) {
+export function ResultScreen({ analysis, tier, onBack, onClose, onPrimaryAction, onSecondaryAction, secondaryLabel, scoreCaption, children }: ResultScreenProps) {
   const v = VARIANTS[tier]
   // 점수가 붙은 신호를 먼저 보여 준다. 안전 결과는 1~3점이어도 감점 근거가 보이도록 통과한 항목을 뒤에 붙인다
   const scoredChecks = analysis.checks.filter((c) => c.detected && c.score > 0)
@@ -188,7 +189,7 @@ export function ResultScreen({ analysis, tier, onBack, onClose, onPrimaryAction,
           <div className="flex items-center justify-between gap-4">
             <div className="flex flex-col gap-1">
               <p className="text-[17px] text-white">{v.scoreLabel}</p>
-              <p className="text-[13px] text-[#a9acae]">{v.scoreCaption}</p>
+              <p className="text-[13px] text-[#a9acae]">{scoreCaption ?? v.scoreCaption}</p>
             </div>
             {tier === 'HIGH' ? (
               <p className="text-[43px] font-medium tracking-[-2px]" style={{ color: v.accentColor }}>
