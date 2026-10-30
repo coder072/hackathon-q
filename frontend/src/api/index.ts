@@ -1,13 +1,5 @@
 import { request } from './client'
-import type {
-  AnalysisRequest,
-  AnalysisResult,
-  HealthStatus,
-  IntentGuidance,
-  IntentGuidanceRequest,
-  ReportCreated,
-  ReportRequest,
-} from './types'
+import type { AnalysisRequest, AnalysisResult, HealthStatus, IntentGuidance, IntentGuidanceRequest } from './types'
 
 export { ApiError } from './client'
 export type * from './types'
@@ -23,7 +15,4 @@ export const api = {
 
   createIntentGuidance: (body: IntentGuidanceRequest, signal?: AbortSignal) =>
     request<IntentGuidance>('/intent-guidance', { method: 'POST', body, signal }),
-
-  createReport: (body: ReportRequest, signal?: AbortSignal) =>
-    request<ReportCreated>('/reports', { method: 'POST', body, signal }),
 }

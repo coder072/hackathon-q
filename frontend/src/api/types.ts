@@ -9,8 +9,9 @@ export type CheckCode =
   | 'LOOKALIKE_DOMAIN'
   | 'SUSPICIOUS_URL_STRUCTURE'
   | 'DIRECT_IP_ACCESS'
-  | 'BLOCKLIST_MATCH'
   | 'EXCESSIVE_REDIRECTS'
+  // 명세 MVP 표에는 없지만 현재 백엔드가 함께 내려준다
+  | 'BLOCKLIST_MATCH'
   | 'ALLOWLIST_MATCH'
 
 export interface ApiSuccess<T> {
@@ -41,22 +42,17 @@ export type ErrorCode =
   | 'ANALYSIS_FAILED'
   | 'ANALYSIS_TIMEOUT'
   | 'ANALYSIS_NOT_FOUND'
-  | 'REPORT_ALREADY_EXISTS'
-  | 'INVALID_REPORT_REASON'
   | 'INVALID_INTENT_MESSAGE'
   | 'INTENT_GUIDANCE_NOT_ALLOWED'
-  | 'INTENT_NOT_UNDERSTOOD'
-  | 'OFFICIAL_SITE_NOT_FOUND'
+  | 'SENSITIVE_DATA_DETECTED'
+  | 'INTENT_SERVICE_UNAVAILABLE'
   // 클라이언트 전용: 네트워크 단절, 응답 파싱 실패
   | 'NETWORK_ERROR'
   | 'UNKNOWN_ERROR'
 
 // POST /analyses
-export type ScanSource = 'CAMERA' | 'IMAGE'
-
 export interface AnalysisRequest {
   url: string
-  source: ScanSource
   clientRequestId?: string
 }
 
@@ -87,6 +83,8 @@ export interface IntentGuidanceRequest {
   userMessage: string
 }
 
+export type GuidanceStatus = 'MATCHED' | 'NEEDS_CLARIFICATION' | 'NOT_FOUND'
+
 export interface OfficialSiteSuggestion {
   name: string
   url: string
@@ -96,26 +94,14 @@ export interface OfficialSiteSuggestion {
 }
 
 export interface IntentGuidance {
-  intentCode: string
-  serviceName: string
-  confidence: number
-  questionRequired: boolean
-  suggestions: OfficialSiteSuggestion[]
-}
-
-// POST /reports
-export type ReportReason = 'SUSPICIOUS_LOGIN' | 'PAYMENT_REQUEST' | 'IMPERSONATION' | 'MALWARE' | 'OTHER'
-
-export interface ReportRequest {
   analysisId: string
-  reason: ReportReason
-  description?: string
-}
-
-export interface ReportCreated {
-  reportId: string
-  status: 'PENDING' | 'BLOCKED' | 'SAFE'
-  createdAt: string
+  guidanceStatus: GuidanceStatus
+  intentCode: string | null
+  serviceKey: string | null
+  serviceName: string | null
+  confidence: number
+  followUpQuestion: string | null
+  suggestions: OfficialSiteSuggestion[]
 }
 
 // GET /health

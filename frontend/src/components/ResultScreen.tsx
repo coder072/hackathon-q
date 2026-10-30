@@ -8,9 +8,9 @@ const CHECK_TITLES: Partial<Record<CheckCode, string>> = {
   LOOKALIKE_DOMAIN: '유사 도메인 의심',
   SUSPICIOUS_URL_STRUCTURE: '수상한 주소 구조',
   DIRECT_IP_ACCESS: 'IP 주소 직접 접속',
-  BLOCKLIST_MATCH: '차단 목록에 등록된 주소',
   EXCESSIVE_REDIRECTS: '과도한 리디렉션',
-  ALLOWLIST_MATCH: '허용 목록에 등록된 주소',
+  BLOCKLIST_MATCH: '피싱 차단 목록',
+  ALLOWLIST_MATCH: '검증된 공식 도메인',
 }
 
 interface VariantConfig {
@@ -32,7 +32,7 @@ const VARIANTS: Record<RiskTier, VariantConfig> = {
   SAFE: {
     headline: ['안전한', '링크예요'],
     scoreLabel: '안전 · 낮은 위험 신호',
-    scoreCaption: '30점 이상은 주의가 필요해요',
+    scoreCaption: '4점 이상부터 주의가 필요해요',
     accentColor: '#3b82f6',
     glow: 'radial-gradient(closest-side, rgba(224,242,255,0.95) 0%, rgba(96,165,250,0.85) 26%, rgba(37,99,235,0.7) 52%, rgba(30,27,75,0.45) 72%, rgba(10,10,20,0) 88%)',
     evidenceTitle: '확인한 점',
@@ -45,16 +45,16 @@ const VARIANTS: Record<RiskTier, VariantConfig> = {
   AMBIGUOUS: {
     headline: ['주의가 필요한', '링크예요.'],
     scoreLabel: '위험 신호 점수',
-    scoreCaption: '30점 이상은 주의가 필요해요',
+    scoreCaption: '원래 링크는 열지 않도록 막았어요',
     accentColor: '#f5c842',
     glow: 'radial-gradient(closest-side, rgba(255,246,214,0.95) 0%, rgba(250,204,21,0.85) 24%, rgba(234,88,12,0.7) 50%, rgba(124,45,18,0.5) 72%, rgba(10,10,20,0) 88%)',
     evidenceTitle: '살펴볼 신호',
-    advice: '로그인·카드 정보를 요구할 수 있어요.\n입력 전 출처를 따로 확인하세요.',
+    advice: '원래 링크 대신\n검증된 공식 사이트로만 이동하세요.',
     adviceNote: '주소에서 확인한 신호의 결과이며\n실제 페이지의 요청을 확인한 것은 아니에요.',
     primaryLabel: '열지 않고 종료',
     primaryIcon: true,
     primaryTone: 'dark',
-    secondaryLabel: '그래도 진행하기',
+    secondaryLabel: '목적 다시 입력하기',
   },
   HIGH: {
     headline: ['링크 열기가', '차단됐어요.'],
@@ -68,7 +68,7 @@ const VARIANTS: Record<RiskTier, VariantConfig> = {
     primaryLabel: '처음으로',
     primaryIcon: true,
     primaryTone: 'dark',
-    secondaryLabel: '신고 안내',
+    secondaryLabel: '신고 방법 보기',
   },
 }
 
@@ -133,14 +133,18 @@ interface ResultScreenProps {
   onClose: () => void
   onPrimaryAction: () => void
   onSecondaryAction: () => void
+  secondaryLabel?: string
   children?: ReactNode
 }
 
 // SCR-003/004 결과 화면: 안전·주의·차단 공통 레이아웃 (Figma node 67:608 / 62:491 / 67:708 / 70:808)
 // 카드는 드래그로 올리고 내릴 수 있는 바텀시트: 내리면(collapsed) 뒤 그라데이션이 보이고, 올리면(expanded) 전체를 덮는다.
-export function ResultScreen({ analysis, tier, onBack, onClose, onPrimaryAction, onSecondaryAction, children }: ResultScreenProps) {
+export function ResultScreen({ analysis, tier, onBack, onClose, onPrimaryAction, onSecondaryAction, secondaryLabel, children }: ResultScreenProps) {
   const v = VARIANTS[tier]
-  const evidenceChecks = tier === 'SAFE' ? analysis.checks.filter((c) => !c.detected) : analysis.checks.filter((c) => c.detected && c.score > 0)
+  // 점수가 붙은 신호를 먼저 보여 준다. 안전 결과는 1~3점이어도 감점 근거가 보이도록 통과한 항목을 뒤에 붙인다
+  const scoredChecks = analysis.checks.filter((c) => c.detected && c.score > 0)
+  const evidenceChecks =
+    tier === 'SAFE' ? [...scoredChecks, ...analysis.checks.filter((c) => !scoredChecks.includes(c))] : scoredChecks
   const { containerRef, topPx, dragging, radius, handlers } = useDragSheet()
 
   return (
@@ -265,7 +269,7 @@ export function ResultScreen({ analysis, tier, onBack, onClose, onPrimaryAction,
                 onClick={onSecondaryAction}
                 className="flex h-[60px] w-full items-center justify-center rounded-full border border-[#e0e1e2] bg-white px-[22px] text-[18px] font-semibold text-[#101112] transition active:scale-[0.98]"
               >
-                {v.secondaryLabel}
+                {secondaryLabel ?? v.secondaryLabel}
               </button>
             </div>
           </div>
