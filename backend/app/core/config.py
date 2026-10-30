@@ -25,9 +25,14 @@ class Settings(BaseSettings):
     # 분석 세션은 영구 보관하고, 이 시간이 지나면 URL 쿼리·clientRequestId 를 지운다
     url_anonymize_after_hours: int = 24
 
-    # 의도 분류 LLM (4~6점 분석의 POST /intent-guidance 에서만 호출)
-    anthropic_api_key: str | None = None
-    intent_model: str = "claude-haiku-4-5"
+    # 의도 분류 LLM (4~6점 분석의 POST /intent-guidance 에서만 호출). 키가 없으면 규칙 기반만 쓴다
+    openai_api_key: str | None = None
+    # OpenAI 호환 게이트웨이 주소. 기본은 팩트챗, 비우면 OpenAI 를 직접 호출한다
+    openai_base_url: str | None = "https://factchat-cloud.mindlogic.ai/v1/gateway"
+    # 팩트챗의 OpenAI 모델. 실측 평균 1.7초(최대 2.2초), 모르는 서비스는 추측하지 않는다
+    intent_model: str = "gpt-5.4"
+    intent_llm_timeout_seconds: float = 5.0
+    intent_rate_limit: str = "10/minute"  # slowapi 형식
 
     @field_validator("cors_origins", mode="before")
     @classmethod

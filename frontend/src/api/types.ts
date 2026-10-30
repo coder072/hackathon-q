@@ -45,8 +45,7 @@ export type ErrorCode =
   | 'INVALID_REPORT_REASON'
   | 'INVALID_INTENT_MESSAGE'
   | 'INTENT_GUIDANCE_NOT_ALLOWED'
-  | 'INTENT_NOT_UNDERSTOOD'
-  | 'OFFICIAL_SITE_NOT_FOUND'
+  | 'SENSITIVE_DATA_DETECTED'
   // 클라이언트 전용: 네트워크 단절, 응답 파싱 실패
   | 'NETWORK_ERROR'
   | 'UNKNOWN_ERROR'
@@ -95,11 +94,25 @@ export interface OfficialSiteSuggestion {
   verified: true
 }
 
+// 후보가 없거나 의도를 알 수 없어도 오류가 아닌 200 으로 오며, 원래 링크는 계속 차단한다
+export type GuidanceStatus = 'MATCHED' | 'NEEDS_CLARIFICATION' | 'NOT_FOUND'
+
+// QR 링크와 사용자 의도를 비교한 판단. 원래 링크를 열어도 된다는 결론은 주지 않는다
+export interface IntentAssessment {
+  matchesIntent: boolean | null
+  explanation: string
+  source: 'llm' | 'rules'
+}
+
 export interface IntentGuidance {
-  intentCode: string
-  serviceName: string
+  analysisId: string
+  guidanceStatus: GuidanceStatus
+  intentCode: string | null
+  serviceKey: string | null
+  serviceName: string | null
   confidence: number
-  questionRequired: boolean
+  followUpQuestion: string | null
+  assessment: IntentAssessment
   suggestions: OfficialSiteSuggestion[]
 }
 

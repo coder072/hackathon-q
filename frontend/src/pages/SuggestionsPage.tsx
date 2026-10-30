@@ -17,13 +17,31 @@ export function SuggestionsPage() {
   // 서버가 검증한 후보만 표시 (방어적으로 verified 재확인)
   const suggestions = guidance.suggestions.filter((s) => s.verified).slice(0, 3)
 
+  // QR 링크와 사용자 목적을 비교한 판단 (AI 또는 규칙). 원래 링크는 어떤 경우에도 열지 않는다
+  const assessment = (
+    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+      <p className="mb-1 font-semibold">{guidance.assessment.source === 'llm' ? 'AI 판단' : '판단'}</p>
+      <p>{guidance.assessment.explanation}</p>
+    </div>
+  )
+
+  // RST-010: 의도를 알 수 없거나 후보가 없으면 원래 링크 차단을 유지한다
   if (suggestions.length === 0) {
+    const needsMore = guidance.guidanceStatus === 'NEEDS_CLARIFICATION'
     return (
       <ErrorView
         title="원래 링크는 계속 차단돼요"
-        message="확인된 공식 사이트를 찾지 못했어요. QR을 제공한 곳에 직접 확인해 주세요."
+        message={
+          needsMore && guidance.followUpQuestion
+            ? guidance.followUpQuestion
+            : '확인된 공식 사이트를 찾지 못했어요. QR을 제공한 곳에 직접 확인해 주세요.'
+        }
       >
-        <Button onClick={goHome}>다시 스캔</Button>
+        {assessment}
+        {needsMore && <Button onClick={() => navigate('/intent')}>다시 입력</Button>}
+        <Button variant={needsMore ? 'secondary' : undefined} onClick={goHome}>
+          다시 스캔
+        </Button>
       </ErrorView>
     )
   }
@@ -36,6 +54,8 @@ export function SuggestionsPage() {
           {guidance.serviceName} · {guidance.intentCode}
         </h1>
       </div>
+
+      {assessment}
 
       <ul className="space-y-3">
         {suggestions.map((s) => (

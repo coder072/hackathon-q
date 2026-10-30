@@ -1,0 +1,90 @@
+{
+  "intents": [
+    { "code": "SERVICE_LOGIN", "name": "로그인", "keywords": ["로그인", "접속", "sign in", "signin", "log in", "login"] },
+    { "code": "DELIVERY_TRACKING", "name": "배송 조회", "keywords": ["배송", "택배", "운송장", "delivery", "tracking"] },
+    { "code": "PAYMENT", "name": "결제·납부", "keywords": ["결제", "납부", "송금", "이체", "payment", "pay"] },
+    { "code": "ACCOUNT_INQUIRY", "name": "계좌·내역 조회", "keywords": ["잔액", "계좌 조회", "거래 내역", "내역 조회", "이용 내역"] },
+    { "code": "ORDER_LOOKUP", "name": "주문 조회", "keywords": ["주문", "구매 내역"] },
+    { "code": "CUSTOMER_SUPPORT", "name": "고객센터", "keywords": ["고객센터", "문의", "상담"] }
+  ],
+  "services": [
+    {
+      "serviceKey": "naver",
+      "serviceName": "네이버",
+      "aliases": ["네이버", "naver"],
+      "sites": [
+        { "intentCodes": ["SERVICE_LOGIN"], "name": "네이버 로그인", "url": "https://nid.naver.com/nidlogin.login", "reason": "네이버 공식 로그인 페이지입니다." },
+        { "intentCodes": ["CUSTOMER_SUPPORT"], "name": "네이버 고객센터", "url": "https://help.naver.com/", "reason": "네이버 공식 고객센터입니다." },
+        { "intentCodes": ["*"], "name": "네이버", "url": "https://www.naver.com/", "reason": "네이버 공식 홈페이지입니다." }
+      ]
+    },
+    {
+      "serviceKey": "kakao",
+      "serviceName": "카카오",
+      "aliases": ["카카오", "카톡", "카카오톡", "kakao"],
+      "sites": [
+        { "intentCodes": ["SERVICE_LOGIN"], "name": "카카오계정 로그인", "url": "https://accounts.kakao.com/login", "reason": "카카오 공식 계정 로그인 페이지입니다." },
+        { "intentCodes": ["CUSTOMER_SUPPORT"], "name": "카카오 고객센터", "url": "https://cs.kakao.com/", "reason": "카카오 공식 고객센터입니다." },
+        { "intentCodes": ["*"], "name": "카카오", "url": "https://www.kakao.com/", "reason": "카카오 공식 홈페이지입니다." }
+      ]
+    },
+    {
+      "serviceKey": "coupang",
+      "serviceName": "쿠팡",
+      "aliases": ["쿠팡", "coupang"],
+      "sites": [
+        { "intentCodes": ["SERVICE_LOGIN"], "name": "쿠팡 로그인", "url": "https://login.coupang.com/login/login.pang", "reason": "쿠팡 공식 로그인 페이지입니다." },
+        { "intentCodes": ["*"], "name": "쿠팡", "url": "https://www.coupang.com/", "reason": "쿠팡 공식 홈페이지입니다. 로그인 후 주문·배송을 확인하세요." }
+      ]
+    },
+    {
+      "serviceKey": "korea_post",
+      "serviceName": "우체국",
+      "aliases": ["우체국", "우체국택배", "epost", "인터넷우체국"],
+      "sites": [
+        { "intentCodes": ["DELIVERY_TRACKING"], "name": "우체국 배송조회", "url": "https://service.epost.go.kr/iservice/usr/trace/usrtrc001k01.jsp", "reason": "인터넷우체국 공식 배송조회 페이지입니다." },
+        { "intentCodes": ["*"], "name": "인터넷우체국", "url": "https://www.epost.go.kr/", "reason": "우정사업본부 공식 홈페이지입니다." }
+      ]
+    },
+    {
+      "serviceKey": "shinhan_card",
+      "serviceName": "신한카드",
+      "aliases": ["신한카드", "신한 카드", "shinhan card"],
+      "sites": [
+        { "intentCodes": ["*"], "name": "신한카드", "url": "https://www.shinhancard.com/", "reason": "신한카드 공식 홈페이지입니다." }
+      ]
+    },
+    {
+      "serviceKey": "kb_bank",
+      "serviceName": "KB국민은행",
+      "aliases": ["국민은행", "kb국민은행", "kb bank", "kb은행"],
+      "sites": [
+        { "intentCodes": ["*"], "name": "KB국민은행", "url": "https://www.kbstar.com/", "reason": "KB국민은행 공식 홈페이지입니다." }
+      ]
+    },
+    {
+      "serviceKey": "toss",
+      "serviceName": "토스",
+      "aliases": ["토스", "toss"],
+      "sites": [
+        { "intentCodes": ["*"], "name": "토스", "url": "https://toss.im/", "reason": "토스 공식 홈페이지입니다." }
+      ]
+    },
+    {
+      "serviceKey": "gov24",
+      "serviceName": "정부24",
+      "aliases": ["정부24", "정부 24", "민원24"],
+      "sites": [
+        { "intentCodes": ["*"], "name": "정부24", "url": "https://www.gov.kr/", "reason": "행정안전부 공식 민원 서비스입니다." }
+      ]
+    },
+    {
+      "serviceKey": "hometax",
+      "serviceName": "홈택스",
+      "aliases": ["홈택스", "국세청", "hometax"],
+      "sites": [
+        { "intentCodes": ["*"], "name": "홈택스", "url": "https://www.hometax.go.kr/", "reason": "국세청 공식 홈택스입니다." }
+      ]
+    }
+  ]
+}
