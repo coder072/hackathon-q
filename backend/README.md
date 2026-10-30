@@ -76,7 +76,7 @@ backend/
     │   ├── deps.py         # DbSession, AppSettings 의존성
     │   └── v1/
     │       ├── router.py   # v1 라우터 (엔드포인트 등록)
-    │       └── endpoints/  # health, analyses
+    │       └── endpoints/  # health, analyses, intent_guidance
     ├── core/               # 설정, 오류 코드·핸들러, Request ID 미들웨어, ID 생성, 요청 제한(slowapi)
     ├── db/session.py       # SQLAlchemy 엔진/세션 (PostgreSQL, psycopg)
     ├── catalog/            # 차단·허용 목록, 유명 서비스 도메인, 단축 URL 목록 (JSON)
@@ -84,11 +84,18 @@ backend/
     ├── models/             # SQLAlchemy 모델 (analysis_sessions)
     ├── schemas/            # 요청/응답 스키마 (CamelModel, ApiResponse[T])
     └── services/
-        └── analyses/       # POST /analyses
-            ├── parsing.py  # URL 정규화, IDNA (URL-001)
-            ├── analyzer.py # DNS·SSRF 검사, 리디렉션 추적, 분석 흐름 (URL-003·004·009)
-            ├── rules.py    # 위험 점수 규칙, 차단·허용 목록 (URL-002·005~008)
-            └── sessions.py # 분석 세션 저장·조회
+        ├── analyses/       # POST /analyses
+        │   ├── parsing.py  # URL 정규화, IDNA (URL-001)
+        │   ├── analyzer.py # DNS·SSRF 검사, 리디렉션 추적, 분석 흐름 (URL-003·004·009)
+        │   ├── rules.py    # 위험 점수 규칙, 차단·허용 목록 (URL-002·005~008)
+        │   └── sessions.py # 분석 세션 저장·조회
+        └── intent/         # POST /intent-guidance
+            ├── assessment.py # QR 링크·의도 비교 판단 검증, 규칙 판단
+            ├── catalog.py  # 공식 사이트 카탈로그 (catalog/official_sites.json)
+            ├── sensitive.py # 민감정보 패턴 (INT-005)
+            ├── rules.py    # 규칙 기반 분류기 (LLM 대체)
+            ├── llm.py      # OpenAI 의도 분류기 (Structured Outputs, 카탈로그 키만)
+            └── guidance.py # 분류 → 공식 사이트 후보 조립
 ```
 
 ## 요청 제한
@@ -119,6 +126,20 @@ IP는 `X-Forwarded-For` 의 첫 번째 값 기준이다 (Vite 프록시·터널�
 - 차단·허용 목록은 관리자 API 없이 `app/catalog/*.json` 을 수정한다.
 - 테스트는 `respx` 로 HTTP 를 가로채고 DNS 는 가짜 Resolver 로 바꿔 네트워크 없이 실행한다.
 
+## 접속 의도 안내 (`POST /intent-guidance`)
+
+`세션 검사(4~6점·20분 이내) → 메시지 검증·민감정보 차단 → AI 판단(의도 분류 + QR 링크 비교) → 서버 검증 → 공식 사이트 카탈로그 조회` 순서로 처리한다.
+
+- AI 에는 사용자 문장과 분석 요약(최종 도메인·점수·리디렉션·탐지 근거)만 넘긴다. URL 전체(경로·쿼리)는 넘기지 않는다.
+- AI 는 `matchesIntent`(QR 링크가 원한 서비스의 공식 도메인인지)와 사용자용 설명 `explanation` 을 판단한다. 응답의 `assessment` 에 담긴다.
+- 서버 검증: 공식 도메인이 아닌데 '일치'라고 하면 규칙 판단으로 대체하고, 설명의 URL·허용되지 않은 도메인은 가린다. **원래 링크를 열어도 된다는 결론은 없다**(4~6점은 항상 차단).
+
+- 의도 분류는 `backend/.env` 에 `OPENAI_API_KEY`(팩트챗 키)가 있으면 팩트챗 게이트웨이(OpenAI 호환, `INTENT_MODEL` 기본 OpenAI `gpt-5.4`)로, 없거나 실패(크레딧 부족 등)·5초 초과 시 규칙 기반으로 한다. `.env` 는 `cp .env.example .env` 로 만들고 키를 넣은 뒤 `docker compose up -d` 로 컨테이너를 다시 만든다 (`restart` 는 `.env` 를 다시 읽지 않는다). OpenAI 키를 직접 쓰려면 `OPENAI_BASE_URL=` 을 비우고 OpenAI 모델 이름을 `INTENT_MODEL` 에 넣는다.
+- LLM 은 카탈로그의 `serviceKey`·`intentCode` 중에서만 고른다(구조화 출력). URL 은 `app/catalog/official_sites.json` 에서만 나오고, 모든 URL 이 허용 목록 도메인인지 테스트로 확인한다.
+- 의도를 알 수 없거나 후보가 없어도 오류가 아닌 `200` + `NEEDS_CLARIFICATION`/`NOT_FOUND` 로 응답한다(원래 링크 차단 유지).
+- 민감정보(비밀번호·인증번호·계좌·주민번호·카드번호)는 LLM 에 보내기 전에 `422 SENSITIVE_DATA_DETECTED`. 사용자 원문은 저장·로그하지 않는다.
+- 테스트는 가짜 분류기·가짜 클라이언트로 실행한다(실제 API 호출 없음). openai SDK 는 `httpx2` 를 써서 `respx` 로는 가로챌 수 없다.
+
 ## API (MVP)
 
 | Method | Path | 설명 | 상태 |
@@ -126,4 +147,4 @@ IP는 `X-Forwarded-For` 의 첫 번째 값 기준이다 (Vite 프록시·터널�
 | GET | `/health` | 서비스 상태 확인 | ✅ |
 | POST | `/analyses` | URL 분석 | ✅ |
 | GET | `/analyses/{analysisId}` | 분석 결과 조회 (저장된 결과, 기간 제한 없음) | ✅ |
-| POST | `/intent-guidance` | 접속 의도 분석·공식 사이트 안내 | TODO |
+| POST | `/intent-guidance` | 접속 의도 분석·공식 사이트 안내 (4~6점) | ✅ |

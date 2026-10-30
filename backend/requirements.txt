@@ -11,4 +11,4 @@ slowapi==0.1.10
 tldextract==5.4.0
 idna==3.20
 rapidfuzz==3.14.6
-anthropic==2.3.0
+openai==3.41.0

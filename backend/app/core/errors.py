@@ -15,6 +15,9 @@ class ErrorCode(StrEnum):
     ANALYSIS_NOT_FOUND = "ANALYSIS_NOT_FOUND"
     REPORT_ALREADY_EXISTS = "REPORT_ALREADY_EXISTS"
     INVALID_REPORT_REASON = "INVALID_REPORT_REASON"
+    INVALID_INTENT_MESSAGE = "INVALID_INTENT_MESSAGE"
+    INTENT_GUIDANCE_NOT_ALLOWED = "INTENT_GUIDANCE_NOT_ALLOWED"
+    SENSITIVE_DATA_DETECTED = "SENSITIVE_DATA_DETECTED"
     RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED"
     UNAUTHORIZED = "UNAUTHORIZED"
     FORBIDDEN = "FORBIDDEN"
@@ -34,6 +37,12 @@ ERROR_SPECS: dict[ErrorCode, tuple[int, str]] = {
     ErrorCode.ANALYSIS_NOT_FOUND: (404, "분석 결과가 없거나 보관 기간이 만료되었습니다."),
     ErrorCode.REPORT_ALREADY_EXISTS: (409, "이미 신고된 분석 결과입니다."),
     ErrorCode.INVALID_REPORT_REASON: (422, "지원하지 않는 신고 사유입니다."),
+    ErrorCode.INVALID_INTENT_MESSAGE: (400, "접속 목적을 1~300자로 입력해 주세요."),
+    ErrorCode.INTENT_GUIDANCE_NOT_ALLOWED: (409, "접속 의도 확인 대상이 아닙니다."),
+    ErrorCode.SENSITIVE_DATA_DETECTED: (
+        422,
+        "비밀번호·인증번호·계좌번호 같은 민감정보를 지우고 다시 입력해 주세요.",
+    ),
     ErrorCode.RATE_LIMIT_EXCEEDED: (429, "요청 횟수 제한을 초과했습니다."),
     ErrorCode.UNAUTHORIZED: (401, "인증에 실패했습니다."),
     ErrorCode.FORBIDDEN: (403, "권한이 없습니다."),

@@ -8,7 +8,7 @@ QR 코드 속 링크를 열기 전에 피싱 여부를 판정하는 PWA. 배포 
 | 프론트엔드 (`frontend/`) | React, TypeScript, Vite, vite-plugin-pwa, qr-scanner (Node 22) |
 | 백엔드 (`backend/`) | FastAPI, Pydantic v2, SQLAlchemy 2, Alembic, PostgreSQL 16 (Python 3.12) |
 | URL 분석 | httpx, tldextract, idna, rapidfuzz |
-| 의도 분류 | Claude API (4~6점 분석에서만 호출) |
+| 의도 분류 | OpenAI `gpt-5.4` (팩트챗 게이트웨이) — 4~6점 분석에서만 호출, 5초 초과·실패 시 규칙 기반 |
 | 요청 제한 / ID | slowapi / python-ulid |
 | 테스트·CI | pytest, respx, Ruff, oxlint, GitHub Actions |
 | 로컬 실행 | Docker Compose (PostgreSQL + 백엔드), Vite 개발 서버 (프론트) |
@@ -32,4 +32,5 @@ Docker 없이 실행하는 방법과 휴대폰 테스트(Cloudflare Tunnel / ngr
 - 마이그레이션은 백엔드가 **시작할 때만** 적용된다. 코드 자동 리로드로는 적용되지 않으므로, `backend/migrations/versions/` 에 새 파일이 생겼으면 `docker compose restart backend` 를 실행한다.
 - 모델을 바꿨으면 마이그레이션을 만든다: `docker compose exec backend alembic revision --autogenerate -m "설명"`
 - 테스트·린트: `docker compose exec backend pytest`, `docker compose exec backend ruff check .`
+- `backend/.env` 를 바꿨으면 `docker compose up -d` 로 컨테이너를 다시 만든다. `restart` 는 `.env` 를 다시 읽지 않는다.
 - 끝나면 `docker compose down` (DB 데이터는 유지, 완전히 지우려면 `docker compose down -v`)
