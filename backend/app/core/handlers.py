@@ -3,6 +3,7 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.errors import ERROR_SPECS, AppError, ErrorCode
@@ -24,6 +25,16 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=exc.status_code,
             content=_error_body(request, exc.code, exc.message, exc.details),
+        )
+
+    @app.exception_handler(RateLimitExceeded)
+    async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+        code = ErrorCode.RATE_LIMIT_EXCEEDED
+        status, message = ERROR_SPECS[code]
+        return JSONResponse(
+            status_code=status,
+            content=_error_body(request, code, message, []),
+            headers={"Retry-After": "60"},
         )
 
     @app.exception_handler(RequestValidationError)

@@ -30,10 +30,3 @@ def get_db() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
-
-
-def init_db() -> None:
-    # 해커톤 MVP: 마이그레이션 도구 대신 create_all 사용
-    import app.models  # noqa: F401  모델 등록
-
-    Base.metadata.create_all(bind=engine)

@@ -16,7 +16,10 @@ npm run preview   # 빌드 결과 확인 (PWA 설치·캐시 테스트는 여기
 npm run lint
 ```
 
-> 카메라와 서비스 워커는 HTTPS 또는 `localhost` 에서만 동작한다. 휴대폰 실기기 테스트는 배포 URL이나 HTTPS 터널(ngrok, cloudflared 등)을 사용한다.
+> 카메라와 서비스 워커는 HTTPS 또는 `localhost` 에서만 동작한다. 휴대폰 실기기 테스트는 개발 서버를 HTTPS 터널로 연다.
+> `cloudflared tunnel --url http://localhost:5173` 또는 `ngrok http 5173` (터널 도메인은 `vite.config.ts` 의 `allowedHosts` 에 등록되어 있다)
+
+Node 22 기준 (`.nvmrc`).
 
 ## 화면 / 라우트
 

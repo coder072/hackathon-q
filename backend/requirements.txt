@@ -1,5 +1,14 @@
-fastapi[standard]>=0.115
-pydantic>=2.12
-pydantic-settings>=2.6
-sqlalchemy>=2.0.36
-python-ulid>=3.0
+# 버전을 바꿀 때는 docker compose build 후 테스트를 통과한 버전으로 고정한다
+fastapi[standard]==0.162.0
+pydantic==2.14.2
+pydantic-settings==2.16.2
+sqlalchemy==2.1.6
+alembic==1.20.1
+psycopg[binary]==3.3.6
+python-ulid==4.1.0
+httpx==0.28.1
+slowapi==0.1.10
+tldextract==5.4.0
+idna==3.20
+rapidfuzz==3.14.6
+anthropic==2.3.0
