@@ -1,14 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { isHttpUrl } from '../lib/verdict'
 
-// 개발 서버에서만 보이는 점수 구간별 테스트 주소 (실제 백엔드 규칙 기준)
-const DEV_SAMPLES = [
-  { label: '안전 0점', url: 'https://www.naver.com' },
-  { label: '의심 4점', url: 'https://naver-login.github.io' },
-  { label: '의심 6점', url: 'http://naver-login.github.io/account/verify' },
-  { label: '차단 10점', url: 'http://naver-login-security.com' },
-]
-
 // QR 없이(카메라가 없거나 테스트할 때) 주소를 직접 입력해 분석한다
 export function ManualUrlForm({ onSubmit }: { onSubmit: (url: string) => void }) {
   const [url, setUrl] = useState('')
@@ -52,20 +44,6 @@ export function ManualUrlForm({ onSubmit }: { onSubmit: (url: string) => void })
         </button>
       </div>
       {invalid && <p className="text-sm text-red-300">http:// 또는 https:// 로 시작하는 주소를 입력해 주세요.</p>}
-      {import.meta.env.DEV && (
-        <div className="flex flex-wrap gap-2 pt-1">
-          {DEV_SAMPLES.map((s) => (
-            <button
-              key={s.url}
-              type="button"
-              className="rounded-full border border-white/40 px-3 py-1 text-xs text-[#f7f8f6]"
-              onClick={() => onSubmit(s.url)}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-      )}
     </form>
   )
 }
