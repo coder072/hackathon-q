@@ -22,8 +22,8 @@ class Settings(BaseSettings):
     analysis_timeout_seconds: float = 5.0
     max_redirects: int = 5
 
-    # 분석 세션 행 보관 시간. 앱 실행 중 1시간마다 이보다 오래된 세션을 지운다
-    session_retention_hours: int = 24
+    # 분석 세션은 영구 보관하고, 이 시간이 지나면 URL 쿼리·clientRequestId 를 지운다
+    url_anonymize_after_hours: int = 24
 
     # 의도 분류 LLM (4~6점 분석의 POST /intent-guidance 에서만 호출)
     anthropic_api_key: str | None = None

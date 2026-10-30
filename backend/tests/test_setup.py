@@ -1,17 +1,11 @@
-from datetime import UTC, datetime, timedelta
-
 from alembic import command
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from slowapi import Limiter
-from sqlalchemy import select
 
 from app.core.handlers import register_exception_handlers
 from app.core.middleware import RequestIdMiddleware
 from app.core.rate_limit import client_ip
-from app.db.session import SessionLocal
-from app.jobs.purge_sessions import purge_expired_sessions
-from app.models.analysis_session import AnalysisSession
 
 
 def test_models_match_migrations(alembic_config):
@@ -47,29 +41,3 @@ def test_rate_limit_uses_forwarded_ip_and_error_envelope():
 
     # 다른 사용자는 영향을 받지 않는다
     assert client.get("/limited", headers={"X-Forwarded-For": "2.2.2.2"}).status_code == 200
-
-
-def test_purge_deletes_sessions_older_than_24_hours():
-    now = datetime.now(UTC)
-    with SessionLocal() as db:
-        for sid, age in (("ana_old", 25), ("ana_new", 1)):
-            db.add(
-                AnalysisSession(
-                    id=sid,
-                    score=0,
-                    verdict="SAFE",
-                    recommended_action="OPEN_ALLOWED",
-                    result_json="{}",
-                    created_at=now - timedelta(hours=age),
-                    expires_at=now - timedelta(hours=age) + timedelta(minutes=20),
-                )
-            )
-        db.commit()
-
-    # 다른 테스트가 방금 저장한 세션은 24시간이 지나지 않아 남는다
-    assert purge_expired_sessions(now) == 1
-    with SessionLocal() as db:
-        ids = db.scalars(
-            select(AnalysisSession.id).where(AnalysisSession.id.in_(["ana_old", "ana_new"]))
-        ).all()
-    assert ids == ["ana_new"]
