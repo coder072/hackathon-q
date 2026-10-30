@@ -20,6 +20,7 @@ class FakeNet:
         self.hosts: dict[str, list[str]] = {}
         self.pages: dict[str, tuple[int, str | None]] = {}
         self.error: Exception | None = None
+        self.errors: dict[str, Exception] = {}  # URL 별 접속 오류
         self.dns_delay = 0.0
         self.requests: list[httpx.Request] = []
         router.get(url__regex=r".*").mock(side_effect=self._respond)
@@ -49,6 +50,8 @@ class FakeNet:
         self.requests.append(request)
         if self.error:
             raise self.error
+        if self.visited[-1] in self.errors:
+            raise self.errors[self.visited[-1]]
         status, location = self.pages.get(self.visited[-1], (200, None))
         return httpx.Response(status, headers={"location": location} if location else {})
 
@@ -315,3 +318,55 @@ def test_get_unknown_or_malformed_id_is_404(client, net, analysis_id):
     assert r.status_code == 404
     assert r.json()["success"] is False
     assert r.json()["error"]["code"] == "ANALYSIS_NOT_FOUND"
+
+
+UNREACHABLE = "목적지 서버에 접속할 수 없어 리디렉션을 확인하지 못했습니다."
+COUPON_QR = "http://34.223.124.45/event/coupon?ref=" + "a1b2c3d4e5" * 14
+
+
+@pytest.mark.parametrize("error", [httpx.ConnectTimeout("hang"), httpx.ConnectError("refused")])
+def test_unreachable_server_is_judged_by_url_signals(client, net, error):
+    # 응답 없는 IP 서버(#26): IP 직접 접속(3) + HTTP(1) + 긴 URL(1) = 5점
+    net.error = error
+    r = analyze(client, COUPON_QR)
+
+    assert r.status_code == 200
+    data = r.json()["data"]
+    assert (data["score"], data["recommendedAction"]) == (5, "ASK_INTENT")
+    assert detected(r.json()) == {"DIRECT_IP_ACCESS", "HTTPS_NOT_USED", "SUSPICIOUS_URL_STRUCTURE"}
+    messages = {c["code"]: c["message"] for c in data["checks"]}
+    assert messages["EXCESSIVE_REDIRECTS"] == UNREACHABLE
+
+
+def test_unreachable_after_redirect_uses_checked_hops(client, net):
+    net.add("qr-event.com")
+    net.redirect("https://qr-event.com/", "http://5.6.7.8/login")
+    net.errors["http://5.6.7.8/login"] = httpx.ConnectError("refused")
+    data = analyze(client, "https://qr-event.com/").json()["data"]
+
+    assert data["finalUrl"] == "http://5.6.7.8/login"
+    assert data["redirectCount"] == 1
+    assert data["score"] == 4  # IP(3) + HTTP(1)
+
+
+@pytest.mark.parametrize(
+    ("error", "status", "code"),
+    [
+        (httpx.ConnectTimeout("hang"), 504, "ANALYSIS_TIMEOUT"),
+        (httpx.ConnectError("refused"), 500, "ANALYSIS_FAILED"),
+    ],
+)
+def test_unreachable_low_score_is_never_safe(client, net, error, status, code):
+    # URL 신호가 약하면(4점 미만) 확인하지 못한 링크를 안전으로 판정하지 않는다
+    net.add("plain-site.com")
+    net.error = error
+    r = analyze(client, "https://plain-site.com/")
+    assert r.status_code == status
+    assert r.json()["error"]["code"] == code
+
+
+def test_unreachable_shortener_still_fails(client, net):
+    net.add("bit.ly")
+    net.error = httpx.ConnectError("refused")
+    r = analyze(client, "https://bit.ly/abc")
+    assert r.json()["error"]["code"] == "ANALYSIS_FAILED"

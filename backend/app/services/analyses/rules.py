@@ -23,6 +23,8 @@ SCORES = {
     CheckCode.ALLOWLIST_MATCH: 0,
 }
 MAX_SCORE = 10
+# 이 점수 이상이면 피싱 의심 (0~3 안전, 4~6 의도 확인, 7~10 차단)
+SUSPICIOUS_MIN_SCORE = 4
 
 # 이 횟수 이상 리디렉션되면 EXCESSIVE_REDIRECTS (최대 허용 횟수 초과는 별도 오류)
 EXCESSIVE_REDIRECT_COUNT = 3
@@ -136,7 +138,10 @@ def _check(code: CheckCode, detected: bool, message: str) -> CheckResult:
     )
 
 
-def evaluate(hops: list[ParsedUrl], blocked: bool, catalog: UrlCatalog) -> list[CheckResult]:
+def evaluate(
+    hops: list[ParsedUrl], blocked: bool, catalog: UrlCatalog, unreachable: bool = False
+) -> list[CheckResult]:
+    """unreachable: 대상 서버에 접속하지 못해 리디렉션을 끝까지 확인하지 못한 경우."""
     final = hops[-1]
     redirects = len(hops) - 1
     lookalike = find_lookalike_brand(final.host, catalog)
@@ -183,6 +188,8 @@ def evaluate(hops: list[ParsedUrl], blocked: bool, catalog: UrlCatalog) -> list[
             redirects >= EXCESSIVE_REDIRECT_COUNT,
             f"여러 주소를 거쳐 이동합니다. (리디렉션 {redirects}회)"
             if redirects >= EXCESSIVE_REDIRECT_COUNT
+            else "목적지 서버에 접속할 수 없어 리디렉션을 확인하지 못했습니다."
+            if unreachable
             else f"리디렉션 {redirects}회로 정상 범위입니다.",
         ),
         _check(
