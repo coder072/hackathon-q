@@ -25,8 +25,8 @@ export function ManualUrlForm({ onSubmit }: { onSubmit: (url: string) => void })
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-2 rounded-xl bg-slate-900 p-4">
-      <label htmlFor="manual-url" className="text-sm font-semibold text-slate-300">
+    <form onSubmit={submit} className="flex flex-col gap-2 rounded-[22px] bg-[#424149]/90 p-4 backdrop-blur">
+      <label htmlFor="manual-url" className="text-[13px] font-medium text-[#e3e2e8]">
         QR이 없나요? 주소를 직접 입력해 보세요
       </label>
       <div className="flex gap-2">
@@ -36,7 +36,7 @@ export function ManualUrlForm({ onSubmit }: { onSubmit: (url: string) => void })
           inputMode="url"
           autoComplete="off"
           placeholder="https://example.com"
-          className="min-w-0 flex-1 rounded-lg bg-slate-800 px-3 py-2 font-mono text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+          className="h-[43px] min-w-0 flex-1 rounded-[10px] border border-white/40 bg-transparent px-3 font-mono text-sm text-[#f7f8f6] outline-none placeholder:text-[#e3e2e8]/50 focus:border-white"
           value={url}
           onChange={(e) => {
             setUrl(e.target.value)
@@ -46,7 +46,7 @@ export function ManualUrlForm({ onSubmit }: { onSubmit: (url: string) => void })
         <button
           type="submit"
           disabled={!url.trim()}
-          className="shrink-0 rounded-lg bg-emerald-500 px-4 font-semibold text-slate-950 disabled:opacity-50"
+          className="h-[43px] shrink-0 rounded-[10px] bg-white px-4 text-[14px] font-bold text-[#090a0d] transition active:scale-[0.98] disabled:opacity-50"
         >
           분석
         </button>
@@ -58,7 +58,7 @@ export function ManualUrlForm({ onSubmit }: { onSubmit: (url: string) => void })
             <button
               key={s.url}
               type="button"
-              className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300"
+              className="rounded-full border border-white/40 px-3 py-1 text-xs text-[#f7f8f6]"
               onClick={() => onSubmit(s.url)}
             >
               {s.label}
