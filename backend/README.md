@@ -80,7 +80,7 @@ backend/
     ├── core/               # 설정, 오류 코드·핸들러, Request ID 미들웨어, ID 생성, 요청 제한(slowapi)
     ├── db/session.py       # SQLAlchemy 엔진/세션 (PostgreSQL, psycopg)
     ├── catalog/            # 차단·허용 목록, 유명 서비스 도메인, 단축 URL 목록 (JSON)
-    ├── jobs/               # 24시간 지난 분석 세션 삭제 (앱 실행 중 1시간마다)
+    ├── jobs/               # 24시간 지난 분석 세션 URL 익명화 (앱 실행 중 1시간마다)
     ├── models/             # SQLAlchemy 모델 (analysis_sessions)
     ├── schemas/            # 요청/응답 스키마 (CamelModel, ApiResponse[T])
     └── services/
@@ -115,6 +115,7 @@ IP는 `X-Forwarded-For` 의 첫 번째 값 기준이다 (Vite 프록시·터널�
 - 차단 목록에 걸리면 그 주소에는 접속하지 않고 즉시 10점 처리한다.
 - 등록 도메인은 `tldextract`(내장 공개 접미사 목록, 네트워크 조회 없음), 국제화 도메인은 `idna`(IDNA 2008), 유사 도메인은 `rapidfuzz` 편집 거리로 판단한다.
 - 분석 결과는 `analysis_sessions` 에 저장된다. `expiresAt`(20분)은 `POST /intent-guidance` 같은 후속 행동의 유효 시간이고, `GET /analyses/{analysisId}` 조회는 기간 제한이 없다.
+- 분석 결과는 지우지 않고 영구 보관한다. 24시간이 지나면 URL 의 쿼리·프래그먼트와 `clientRequestId` 를 지운다 (`app/jobs/anonymize_sessions.py`, NFR-007). 도메인·경로·점수·판정·검사 결과는 남는다.
 - 차단·허용 목록은 관리자 API 없이 `app/catalog/*.json` 을 수정한다.
 - 테스트는 `respx` 로 HTTP 를 가로채고 DNS 는 가짜 Resolver 로 바꿔 네트워크 없이 실행한다.
 

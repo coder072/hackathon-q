@@ -12,7 +12,7 @@ from app.core.config import get_settings
 from app.core.handlers import register_exception_handlers
 from app.core.middleware import RequestIdMiddleware
 from app.core.rate_limit import limiter
-from app.jobs.purge_sessions import run_periodically
+from app.jobs.anonymize_sessions import run_periodically
 
 settings = get_settings()
 logging.basicConfig(level=logging.DEBUG if settings.debug else logging.INFO)
@@ -20,11 +20,11 @@ logging.basicConfig(level=logging.DEBUG if settings.debug else logging.INFO)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    purge_task = asyncio.create_task(run_periodically())
+    anonymize_task = asyncio.create_task(run_periodically())
     yield
-    purge_task.cancel()
+    anonymize_task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
-        await purge_task
+        await anonymize_task
 
 
 # 스키마는 Alembic 마이그레이션으로 관리한다 (실행 전 alembic upgrade head)

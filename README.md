@@ -28,7 +28,8 @@ Docker 없이 실행하는 방법과 휴대폰 테스트(Cloudflare Tunnel / ngr
 ## 개발 흐름
 
 - **작업하는 동안 `docker compose up -d` 를 켜 둔다.** 백엔드는 코드를 저장하면 컨테이너 안에서 자동으로 다시 로드된다.
-- `git pull` 후 `backend/requirements*.txt` 나 `Dockerfile` 이 바뀌었으면 `docker compose up -d --build` 로 다시 빌드한다. 마이그레이션은 백엔드가 시작할 때 자동 적용된다.
+- `git pull` 후 `backend/requirements*.txt` 나 `Dockerfile` 이 바뀌었으면 `docker compose up -d --build` 로 다시 빌드한다.
+- 마이그레이션은 백엔드가 **시작할 때만** 적용된다. 코드 자동 리로드로는 적용되지 않으므로, `backend/migrations/versions/` 에 새 파일이 생겼으면 `docker compose restart backend` 를 실행한다.
 - 모델을 바꿨으면 마이그레이션을 만든다: `docker compose exec backend alembic revision --autogenerate -m "설명"`
 - 테스트·린트: `docker compose exec backend pytest`, `docker compose exec backend ruff check .`
 - 끝나면 `docker compose down` (DB 데이터는 유지, 완전히 지우려면 `docker compose down -v`)

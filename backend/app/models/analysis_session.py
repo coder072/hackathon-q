@@ -7,10 +7,11 @@ from app.db.session import Base
 
 
 class AnalysisSession(Base):
-    """URL 분석 결과와 의도 안내 API를 연결하는 세션.
+    """URL 분석 결과. 행은 영구 보관한다.
 
-    expires_at(분석 후 20분)까지만 API에서 사용하고, 행 자체는 created_at 기준 24시간 뒤
-    정리 작업(app.jobs.purge_sessions)이 삭제한다.
+    expires_at(분석 후 20분)은 /intent-guidance 같은 후속 행동의 유효 시간이다.
+    created_at 기준 24시간 뒤 app.jobs.anonymize_sessions 가 URL 쿼리와 client_request_id 를
+    지우고 anonymized_at 을 기록한다.
     """
 
     __tablename__ = "analysis_sessions"
@@ -29,3 +30,4 @@ class AnalysisSession(Base):
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, index=True
     )
+    anonymized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

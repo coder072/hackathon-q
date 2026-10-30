@@ -24,7 +24,7 @@ def find_by_client_request_id(db: Session, client_request_id: str) -> AnalysisRe
 
 
 def save(db: Session, result: AnalysisResult, client_request_id: str | None) -> None:
-    # 오래된 세션은 app.jobs.purge_sessions 가 24시간 뒤 지운다
+    # 행은 영구 보관하고, 24시간 뒤 app.jobs.anonymize_sessions 가 URL 쿼리를 지운다
     db.add(
         AnalysisSession(
             id=result.analysis_id,
