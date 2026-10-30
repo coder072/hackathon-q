@@ -1,7 +1,34 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import type { AnalysisResult, CheckCode } from '../api'
 import type { RiskTier } from '../lib/verdict'
 import { AlertCircleIcon, ArrowLeftIcon, LinkIcon, XIcon } from './icons'
+
+// 스크롤에 맞춰 배경 그라데이션(불)이 위아래로 같이 움직이도록 추적
+function useScrollParallax(maxShift = 140, factor = 0.5) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+
+    let frame = 0
+    const onScroll = () => {
+      if (frame) return
+      frame = requestAnimationFrame(() => {
+        frame = 0
+        const shift = Math.min(window.scrollY * factor, maxShift)
+        if (ref.current) ref.current.style.transform = `translate3d(0, ${-shift}px, 0)`
+      })
+    }
+
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      if (frame) cancelAnimationFrame(frame)
+    }
+  }, [maxShift, factor])
+
+  return ref
+}
 
 const CHECK_TITLES: Partial<Record<CheckCode, string>> = {
   HTTPS_NOT_USED: '암호화되지 않은 연결',
@@ -86,15 +113,17 @@ interface ResultScreenProps {
 export function ResultScreen({ analysis, tier, onBack, onClose, onPrimaryAction, onSecondaryAction, children }: ResultScreenProps) {
   const v = VARIANTS[tier]
   const evidenceChecks = tier === 'SAFE' ? analysis.checks.filter((c) => !c.detected) : analysis.checks.filter((c) => c.detected && c.score > 0)
+  const glowRef = useScrollParallax()
 
   return (
     <div className="-mx-4 flex flex-1 flex-col">
       <div className="relative overflow-hidden bg-[#1b1c1d] px-6 pt-3 pb-[26px]">
-        <div
-          aria-hidden
-          className="result-glow"
-          style={{ background: `radial-gradient(closest-side, rgba(${v.glowRgb},0.55), rgba(${v.glowRgb},0) 70%)` }}
-        />
+        <div aria-hidden ref={glowRef} className="result-glow-wrap">
+          <div
+            className="result-glow"
+            style={{ background: `radial-gradient(closest-side, rgba(${v.glowRgb},0.55), rgba(${v.glowRgb},0) 70%)` }}
+          />
+        </div>
         <nav className="relative flex h-11 items-center justify-between">
           <button type="button" onClick={onBack} aria-label="뒤로가기" className="-ml-2 flex size-11 items-center justify-center">
             <ArrowLeftIcon className="size-6 text-white" />
