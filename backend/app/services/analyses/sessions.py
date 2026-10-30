@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.analysis_session import AnalysisSession
@@ -18,8 +18,7 @@ def find_by_client_request_id(db: Session, client_request_id: str) -> AnalysisRe
 
 
 def save(db: Session, result: AnalysisResult, client_request_id: str | None) -> None:
-    # 보관 기간이 지난 세션은 새 분석을 저장할 때 함께 지운다 (NFR-007)
-    db.execute(delete(AnalysisSession).where(AnalysisSession.expires_at <= datetime.now(UTC)))
+    # 오래된 세션은 app.jobs.purge_sessions 가 24시간 뒤 지운다
     db.add(
         AnalysisSession(
             id=result.analysis_id,

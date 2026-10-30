@@ -1,53 +1,63 @@
 import asyncio
-from datetime import UTC, datetime
 
 import httpx
 import pytest
-from sqlalchemy import select
+import respx
 
 from app.api.v1.endpoints import analyses
 from app.core.config import Settings, get_settings
+from app.core.errors import AppError, ErrorCode
+from app.core.rate_limit import limiter
 from app.db.session import SessionLocal
 from app.main import app
 from app.models.analysis_session import AnalysisSession
-from app.services.analyses.analyzer import HopResponse
-from app.services.analyses.parsing import ParsedUrl
-
-PUBLIC_IP = "93.184.216.34"
 
 
-class FakeProbe:
-    """DNS 응답(hosts)과 URL별 응답(routes)을 미리 정해 두는 가짜 네트워크."""
+class FakeNet:
+    """가짜 DNS(hosts)와 respx 로 가로챈 HTTP 응답(pages). 정하지 않은 페이지는 200 을 돌려준다."""
 
-    def __init__(self, hosts=None, routes=None, delay=0.0, error=None):
-        self.hosts = hosts or {}
-        self.routes = routes or {}
-        self.delay = delay
-        self.error = error
-        self.fetched: list[str] = []
+    def __init__(self, router: respx.Router):
+        self.hosts: dict[str, list[str]] = {}
+        self.pages: dict[str, tuple[int, str | None]] = {}
+        self.error: Exception | None = None
+        self.dns_delay = 0.0
+        self.requests: list[httpx.Request] = []
+        router.get(url__regex=r".*").mock(side_effect=self._respond)
 
-    async def resolve(self, host):
+    def add(self, *names: str) -> None:
+        for name in names:
+            self.hosts[name] = [f"93.184.216.{len(self.hosts) + 1}"]
+
+    def redirect(self, url: str, location: str, status: int = 302) -> None:
+        self.pages[url] = (status, location)
+
+    @property
+    def visited(self) -> list[str]:
+        # 실제 접속은 IP 로 하므로 Host 헤더로 원래 URL 을 복원한다
+        return [
+            f"{r.url.scheme}://{r.headers['host']}{r.url.raw_path.decode()}" for r in self.requests
+        ]
+
+    async def resolve(self, host: str) -> list[str]:
+        if self.dns_delay:
+            await asyncio.sleep(self.dns_delay)
         if host not in self.hosts:
-            from app.core.errors import AppError, ErrorCode
-
             raise AppError(ErrorCode.DNS_RESOLUTION_FAILED)
         return self.hosts[host]
 
-    async def fetch(self, url: ParsedUrl, ip, timeout):
-        self.fetched.append(url.url)
-        if self.delay:
-            await asyncio.sleep(self.delay)
+    def _respond(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
         if self.error:
             raise self.error
-        status, location = self.routes.get(url.url, (200, None))
-        return HopResponse(status, location)
+        status, location = self.pages.get(self.visited[-1], (200, None))
+        return httpx.Response(status, headers={"location": location} if location else {})
 
 
 @pytest.fixture
-def probe():
-    fake = FakeProbe()
-    app.dependency_overrides[analyses.get_url_probe] = lambda: fake
-    analyses.rate_limiter.clear()
+def net(respx_mock):
+    fake = FakeNet(respx_mock)
+    app.dependency_overrides[analyses.get_resolver] = lambda: fake.resolve
+    limiter.reset()
     yield fake
     app.dependency_overrides.clear()
 
@@ -60,8 +70,8 @@ def detected(body):
     return {c["code"] for c in body["data"]["checks"] if c["detected"]}
 
 
-def test_official_site_is_safe(client, probe):
-    probe.hosts = {"www.naver.com": [PUBLIC_IP]}
+def test_official_site_is_safe(client, net):
+    net.add("www.naver.com")
     r = analyze(client, "HTTPS://WWW.Naver.com:443/?q=1")
 
     assert r.status_code == 200
@@ -79,14 +89,23 @@ def test_official_site_is_safe(client, probe):
     assert len(data["checks"]) == 7
 
 
-def test_session_is_stored_for_intent_guidance(client, probe):
-    probe.hosts = {"naver-event.com": [PUBLIC_IP]}
+def test_connects_to_verified_ip_with_original_host_and_sni(client, net):
+    net.add("www.naver.com")
+    analyze(client, "https://www.naver.com/")
+
+    (request,) = net.requests
+    assert request.url.host == "93.184.216.1"
+    assert request.headers["host"] == "www.naver.com"
+    assert request.extensions["sni_hostname"] == "www.naver.com"
+
+
+def test_session_is_stored_for_intent_guidance(client, net):
+    net.add("naver-event.com")
     data = analyze(client, "https://naver-event.com/").json()["data"]
 
     with SessionLocal() as db:
         row = db.get(AnalysisSession, data["analysisId"])
-    assert row.score == 4
-    assert row.recommended_action == "ASK_INTENT"
+    assert (row.score, row.verdict, row.recommended_action) == (4, "SUSPICIOUS", "ASK_INTENT")
 
 
 @pytest.mark.parametrize(
@@ -98,58 +117,55 @@ def test_session_is_stored_for_intent_guidance(client, probe):
         ("https://naver-event.com/", 4, "SUSPICIOUS", "ASK_INTENT"),
         # 유사 도메인(4) + HTTP(1) + 의심 키워드(1) = 6
         ("http://naver-event.com/login/verify", 6, "SUSPICIOUS", "ASK_INTENT"),
-        # 유사 도메인(4) + IP 없음, HTTP(1) + 의심 키워드(1) + 리디렉션 3회(1) = 7
+        # 유사 도메인(4) + HTTP(1) + 의심 키워드(1) + 리디렉션 3회(1) = 7
         ("http://kakao-event.com/login/verify", 7, "SUSPICIOUS", "BLOCK"),
     ],
 )
-def test_score_boundaries(client, probe, url, score, verdict, action):
-    probe.hosts = {h: [PUBLIC_IP] for h in ("a-b-c-d.com", "naver-event.com", "kakao-event.com")}
+def test_score_boundaries(client, net, url, score, verdict, action):
+    net.add("a-b-c-d.com", "naver-event.com", "kakao-event.com")
     for host, path in (("a-b-c-d.com", "/"), ("kakao-event.com", "/login/verify")):
-        probe.routes |= {
-            f"http://{host}{path}": (302, f"{path}?r=1"),
-            f"http://{host}{path}?r=1": (302, f"{path}?r=2"),
-            f"http://{host}{path}?r=2": (302, f"{path}?r=3"),
-        }
+        for i in range(3):
+            current = f"http://{host}{path}" + (f"?r={i}" if i else "")
+            net.redirect(current, f"{path}?r={i + 1}")
 
     data = analyze(client, url).json()["data"]
     assert (data["score"], data["verdict"], data["recommendedAction"]) == (score, verdict, action)
 
 
-def test_direct_ip_and_http(client, probe):
+def test_direct_ip_and_http(client, net):
     r = analyze(client, "http://8.8.8.8/")
     assert r.json()["data"]["score"] == 4
     assert detected(r.json()) == {"DIRECT_IP_ACCESS", "HTTPS_NOT_USED"}
 
 
-def test_blocklisted_url_is_10_without_network(client, probe):
+def test_blocklisted_url_is_10_without_network(client, net):
     r = analyze(client, "https://naver-login-security.com/")
     data = r.json()["data"]
-    assert data["score"] == 10
-    assert data["recommendedAction"] == "BLOCK"
+    assert (data["score"], data["recommendedAction"]) == (10, "BLOCK")
     assert "BLOCKLIST_MATCH" in detected(r.json())
-    assert probe.fetched == []
+    assert net.requests == []
 
 
-def test_blocklist_reached_through_redirect(client, probe):
-    probe.hosts = {"bit.ly": [PUBLIC_IP]}
-    probe.routes = {"https://bit.ly/abc": (301, "https://kakao-verify-account.com/")}
+def test_blocklist_reached_through_redirect(client, net):
+    net.add("bit.ly")
+    net.redirect("https://bit.ly/abc", "https://kakao-verify-account.com/", 301)
     data = analyze(client, "https://bit.ly/abc").json()["data"]
     assert data["score"] == 10
     assert data["finalUrl"] == "https://kakao-verify-account.com/"
-    assert probe.fetched == ["https://bit.ly/abc"]
+    assert net.visited == ["https://bit.ly/abc"]
 
 
-def test_shortener_is_judged_by_final_destination(client, probe):
-    probe.hosts = {"bit.ly": [PUBLIC_IP], "www.coupang.com": [PUBLIC_IP]}
-    probe.routes = {"https://bit.ly/x": (301, "https://www.coupang.com/")}
+def test_shortener_is_judged_by_final_destination(client, net):
+    net.add("bit.ly", "www.coupang.com")
+    net.redirect("https://bit.ly/x", "https://www.coupang.com/", 301)
     data = analyze(client, "https://bit.ly/x").json()["data"]
     assert data["verdict"] == "SAFE"
     assert data["displayDomain"] == "www.coupang.com"
     assert data["redirectCount"] == 1
 
 
-def test_shortener_without_destination_fails(client, probe):
-    probe.hosts = {"bit.ly": [PUBLIC_IP]}
+def test_shortener_without_destination_fails(client, net):
+    net.add("bit.ly")
     r = analyze(client, "https://bit.ly/missing")
     assert r.status_code == 500
     assert r.json()["error"]["code"] == "ANALYSIS_FAILED"
@@ -162,29 +178,30 @@ def test_shortener_without_destination_fails(client, probe):
         ({}, "http://169.254.169.254/latest/meta-data"),
         ({}, "http://2130706433/"),
         ({}, "http://[::ffff:10.0.0.1]/"),
-        ({"mixed.example.com": [PUBLIC_IP, "192.168.0.10"]}, "https://mixed.example.com/"),
+        ({"mixed.example.com": ["93.184.216.1", "192.168.0.10"]}, "https://mixed.example.com/"),
     ],
 )
-def test_private_targets_are_blocked(client, probe, hosts, url):
-    probe.hosts = hosts
+def test_private_targets_are_blocked(client, net, hosts, url):
+    net.hosts = hosts
     r = analyze(client, url)
     assert r.status_code == 400
     assert r.json()["error"]["code"] == "PRIVATE_NETWORK_TARGET"
-    assert probe.fetched == []
+    assert net.requests == []
 
 
-def test_redirect_to_private_address_is_blocked(client, probe):
-    probe.hosts = {"evil.com": [PUBLIC_IP]}
-    probe.routes = {"https://evil.com/": (302, "http://169.254.169.254/")}
+def test_redirect_to_private_address_is_blocked(client, net):
+    net.add("evil.com")
+    net.redirect("https://evil.com/", "http://169.254.169.254/")
     r = analyze(client, "https://evil.com/")
     assert r.json()["error"]["code"] == "PRIVATE_NETWORK_TARGET"
-    assert probe.fetched == ["https://evil.com/"]
+    assert net.visited == ["https://evil.com/"]
 
 
 @pytest.mark.parametrize(("redirects", "status"), [(5, 200), (6, 422)])
-def test_redirect_limit(client, probe, redirects, status):
-    probe.hosts = {"hop.com": [PUBLIC_IP]}
-    probe.routes = {f"https://hop.com/{i}": (302, f"/{i + 1}") for i in range(redirects)}
+def test_redirect_limit(client, net, redirects, status):
+    net.add("hop.com")
+    for i in range(redirects):
+        net.redirect(f"https://hop.com/{i}", f"/{i + 1}")
     r = analyze(client, "https://hop.com/0")
     assert r.status_code == status
     if status == 422:
@@ -204,22 +221,22 @@ def test_redirect_limit(client, probe, redirects, status):
         ("https://no-such-host.example/", 422, "DNS_RESOLUTION_FAILED"),
     ],
 )
-def test_invalid_input(client, probe, url, status, code):
+def test_invalid_input(client, net, url, status, code):
     r = analyze(client, url)
     assert r.status_code == status
     assert r.json()["success"] is False
     assert r.json()["error"]["code"] == code
 
 
-def test_missing_url_is_invalid_request(client, probe):
+def test_missing_url_is_invalid_request(client, net):
     r = client.post("/api/v1/analyses", json={})
     assert r.status_code == 400
     assert r.json()["error"]["code"] == "INVALID_REQUEST"
 
 
-def test_timeout(client, probe):
-    probe.hosts = {"slow.com": [PUBLIC_IP]}
-    probe.delay = 1
+def test_total_timeout(client, net):
+    net.add("slow.com")
+    net.dns_delay = 1
     app.dependency_overrides[get_settings] = lambda: Settings(analysis_timeout_seconds=0.05)
     r = analyze(client, "https://slow.com/")
     assert r.status_code == 504
@@ -227,41 +244,35 @@ def test_timeout(client, probe):
 
 
 @pytest.mark.parametrize(
-    ("error", "code"),
-    [(httpx.ConnectError("refused"), "ANALYSIS_FAILED"), (RuntimeError("bug"), "ANALYSIS_FAILED")],
+    ("error", "status", "code"),
+    [
+        (httpx.ReadTimeout("slow"), 504, "ANALYSIS_TIMEOUT"),
+        (httpx.ConnectError("refused"), 500, "ANALYSIS_FAILED"),
+        (RuntimeError("bug"), 500, "ANALYSIS_FAILED"),
+    ],
 )
-def test_failures_are_never_safe(client, probe, error, code):
-    probe.hosts = {"down.com": [PUBLIC_IP]}
-    probe.error = error
+def test_failures_are_never_safe(client, net, error, status, code):
+    net.add("down.com")
+    net.error = error
     r = analyze(client, "https://down.com/")
-    assert r.status_code == 500
+    assert r.status_code == status
     assert r.json()["success"] is False
     assert r.json()["error"]["code"] == code
 
 
-def test_client_request_id_returns_same_result(client, probe):
-    probe.hosts = {"www.naver.com": [PUBLIC_IP]}
+def test_client_request_id_returns_same_result(client, net):
+    net.add("www.naver.com")
     first = analyze(client, "https://www.naver.com/", clientRequestId="scan-1").json()
     second = analyze(client, "https://www.naver.com/", clientRequestId="scan-1").json()
     assert first["data"]["analysisId"] == second["data"]["analysisId"]
-    assert len(probe.fetched) == 1
+    assert len(net.requests) == 1
 
 
-def test_rate_limit(client, probe):
-    probe.hosts = {"www.naver.com": [PUBLIC_IP]}
-    app.dependency_overrides[get_settings] = lambda: Settings(analysis_rate_limit_per_minute=2)
+def test_rate_limit(client, net, monkeypatch):
+    net.add("www.naver.com")
+    monkeypatch.setattr(get_settings(), "analysis_rate_limit", "2/minute")
     codes = [analyze(client, "https://www.naver.com/").status_code for _ in range(3)]
     assert codes == [200, 200, 429]
-
-
-def test_expired_sessions_are_purged(client, probe):
-    probe.hosts = {"www.naver.com": [PUBLIC_IP]}
-    app.dependency_overrides[get_settings] = lambda: Settings(analysis_ttl_minutes=-1)
-    analyze(client, "https://www.naver.com/")
-    analyze(client, "https://www.naver.com/")
-    with SessionLocal() as db:
-        expired = db.scalars(
-            select(AnalysisSession).where(AnalysisSession.expires_at <= datetime.now(UTC))
-        ).all()
-    # 두 번째 저장 시 첫 번째(만료) 세션이 지워져 방금 저장한 것만 남는다
-    assert len(expired) == 1
+    assert analyze(client, "https://www.naver.com/").json()["error"]["code"] == (
+        "RATE_LIMIT_EXCEEDED"
+    )

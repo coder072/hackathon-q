@@ -4,6 +4,8 @@ import socket
 from dataclasses import dataclass
 from urllib.parse import quote, urlsplit
 
+import idna
+
 from app.core.errors import AppError, ErrorCode
 
 MAX_URL_LENGTH = 2048
@@ -74,10 +76,13 @@ def _normalize_host(hostname: str) -> str:
         except OSError:
             pass
 
-    try:
-        ascii_host = host.encode("idna").decode("ascii")
-    except UnicodeError as exc:
-        raise AppError(ErrorCode.INVALID_URL) from exc
+    ascii_host = host
+    if not host.isascii():
+        # 국제화 도메인은 IDNA 2008(UTS #46)으로 Punycode 변환한다
+        try:
+            ascii_host = idna.encode(host, uts46=True).decode("ascii")
+        except idna.IDNAError as exc:
+            raise AppError(ErrorCode.INVALID_URL) from exc
     if len(ascii_host) > 253 or not all(_LABEL.fullmatch(p) for p in ascii_host.split(".")):
         raise AppError(ErrorCode.INVALID_URL)
     return ascii_host

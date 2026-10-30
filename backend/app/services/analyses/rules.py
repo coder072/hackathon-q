@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+import tldextract
+from rapidfuzz.distance import Levenshtein
+
 from app.schemas.analysis import CheckCode, CheckResult
 from app.services.analyses.parsing import ParsedUrl, is_ip_address
 
@@ -30,13 +33,8 @@ SUSPICIOUS_KEYWORDS = (
     "confirm", "password", "wallet", "banking", "auth", "unlock", "suspend",
 )  # fmt: skip
 
-# 등록 가능 도메인 계산용 2단계 공개 접미사 (공개 접미사 목록의 축약판)
-SECOND_LEVEL_SUFFIXES = frozenset(
-    {
-        "co.kr", "or.kr", "go.kr", "ac.kr", "ne.kr", "re.kr", "pe.kr", "ms.kr", "hs.kr",
-        "co.uk", "org.uk", "ac.uk", "co.jp", "ne.jp", "or.jp", "com.au", "com.cn", "com.br",
-    }
-)  # fmt: skip
+# 등록 가능 도메인 추출: 패키지에 내장된 공개 접미사 목록만 쓰고 실행 중 네트워크 조회를 하지 않는다
+_extract = tldextract.TLDExtract(suffix_list_urls=(), cache_dir=None)
 
 _HOMOGLYPHS = str.maketrans({"0": "o", "1": "l", "3": "e", "4": "a", "5": "s", "7": "t", "8": "b"})
 
@@ -78,21 +76,16 @@ def matches_domain(host: str, domains: tuple[str, ...]) -> bool:
 
 
 def registrable_domain(host: str) -> str:
+    """naver.com, epost.go.kr 처럼 공개 접미사 바로 앞까지의 도메인. IP 는 그대로 반환한다."""
     if is_ip_address(host):
         return host
-    labels = host.split(".")
-    size = 3 if ".".join(labels[-2:]) in SECOND_LEVEL_SUFFIXES else 2
-    return ".".join(labels[-size:])
+    return _extract(host).top_domain_under_public_suffix or host
 
 
-def _edit_distance(a: str, b: str) -> int:
-    prev = list(range(len(b) + 1))
-    for i, ca in enumerate(a, 1):
-        cur = [i]
-        for j, cb in enumerate(b, 1):
-            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
-        prev = cur
-    return prev[-1]
+def _name_labels(host: str) -> list[str]:
+    """공개 접미사(.com, .co.kr 등)를 뺀 나머지 라벨. 하위 도메인 깊이·유사 도메인 검사에 쓴다."""
+    parts = _extract(host)
+    return [label for label in (*parts.subdomain.split("."), parts.domain) if label]
 
 
 def find_lookalike_brand(host: str, catalog: UrlCatalog) -> str | None:
@@ -102,15 +95,15 @@ def find_lookalike_brand(host: str, catalog: UrlCatalog) -> str | None:
     if any(matches_domain(host, brand.domains) for brand in catalog.brands):
         return None
 
-    # 최상위 도메인을 제외한 라벨을 하이픈·밑줄 단위로 나눠 비교한다
-    tokens = [t for t in re.split(r"[.\-_]", ".".join(host.split(".")[:-1])) if t]
+    # 공개 접미사를 뺀 라벨을 하이픈·밑줄 단위로 나눠 비교한다
+    tokens = [t for label in _name_labels(host) for t in re.split(r"[-_]", label) if t]
     for brand in catalog.brands:
         keyword = brand.keyword
         for token in tokens:
             plain = token.replace("rn", "m").replace("vv", "w").translate(_HOMOGLYPHS)
             if keyword in plain:
                 return keyword
-            if len(keyword) >= 5 and _edit_distance(plain, keyword) <= 1:
+            if len(keyword) >= 5 and Levenshtein.distance(plain, keyword) <= 1:
                 return keyword
     return None
 
@@ -126,10 +119,9 @@ def structure_issue(hops: list[ParsedUrl], catalog: UrlCatalog) -> str | None:
         return None
     if "xn--" in final.host:
         return "다른 글자로 위장할 수 있는 국제화 도메인을 사용합니다."
-    subdomain_depth = final.host.count(".") - registrable_domain(final.host).count(".")
-    if subdomain_depth >= MAX_SUBDOMAIN_DEPTH:
+    if len(_name_labels(final.host)) - 1 >= MAX_SUBDOMAIN_DEPTH:
         return "하위 도메인이 지나치게 많습니다."
-    if registrable_domain(final.host).split(".")[0].count("-") >= 3:
+    if _extract(final.host).domain.count("-") >= 3:
         return "도메인에 하이픈이 지나치게 많습니다."
     if not matches_domain(final.host, catalog.allowlist):
         text = f"{final.host}{final.path_query}".lower()

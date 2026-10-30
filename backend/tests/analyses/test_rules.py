@@ -1,7 +1,6 @@
 import pytest
 
 from app.core.errors import AppError
-from app.core.rate_limit import RateLimiter
 from app.services.analyses.parsing import normalize_url
 from app.services.analyses.rules import (
     find_lookalike_brand,
@@ -77,9 +76,3 @@ def test_registrable_domain(host, expected):
 )
 def test_structure_issue(url, flagged):
     assert (structure_issue([normalize_url(url)], load_catalog()) is not None) is flagged
-
-
-def test_rate_limiter_window():
-    limiter = RateLimiter(window_seconds=60)
-    assert [limiter.allow("1.1.1.1", 2) for _ in range(3)] == [True, True, False]
-    assert limiter.allow("2.2.2.2", 2)

@@ -5,28 +5,22 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, Response
 
 from app.api.deps import AppSettings, DbSession
+from app.core.config import get_settings
 from app.core.errors import AppError, ErrorCode
 from app.core.ids import new_id
-from app.core.rate_limit import RateLimiter
+from app.core.rate_limit import limiter
 from app.schemas.analysis import AnalysisRequest, AnalysisResult, RecommendedAction, Verdict
 from app.schemas.common import ApiResponse
 from app.services.analyses import sessions as analysis_sessions
-from app.services.analyses.analyzer import HttpUrlProbe, UrlProbe, analyze_url
+from app.services.analyses.analyzer import Resolver, analyze_url, resolve_host
 from app.services.analyses.rules import load_catalog
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["analyses"])
-rate_limiter = RateLimiter()
 
 
-def get_url_probe() -> UrlProbe:
-    return HttpUrlProbe()
-
-
-def enforce_rate_limit(request: Request, settings: AppSettings) -> None:
-    client_ip = request.client.host if request.client else "unknown"
-    if not rate_limiter.allow(client_ip, settings.analysis_rate_limit_per_minute):
-        raise AppError(ErrorCode.RATE_LIMIT_EXCEEDED)
+def get_resolver() -> Resolver:
+    return resolve_host
 
 
 def decide(score: int) -> tuple[Verdict, RecommendedAction]:
@@ -42,15 +36,15 @@ def decide(score: int) -> tuple[Verdict, RecommendedAction]:
     "/analyses",
     response_model=ApiResponse[AnalysisResult],
     response_model_by_alias=True,
-    dependencies=[Depends(enforce_rate_limit)],
 )
+@limiter.limit(lambda: get_settings().analysis_rate_limit)
 async def create_analysis(
     body: AnalysisRequest,
     request: Request,
     response: Response,
     db: DbSession,
     settings: AppSettings,
-    probe: Annotated[UrlProbe, Depends(get_url_probe)],
+    resolve: Annotated[Resolver, Depends(get_resolver)],
 ) -> ApiResponse[AnalysisResult]:
     response.headers["Cache-Control"] = "no-store"
     request_id = request.state.request_id
@@ -64,7 +58,7 @@ async def create_analysis(
     try:
         outcome = await analyze_url(
             body.url,
-            probe=probe,
+            resolve=resolve,
             catalog=load_catalog(),
             max_redirects=settings.max_redirects,
             timeout=settings.analysis_timeout_seconds,
