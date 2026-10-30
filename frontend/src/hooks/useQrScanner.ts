@@ -28,46 +28,54 @@ export function useQrScanner({ onDecode, enabled = true, restartKey = 0, detectT
     const video = videoRef.current
     if (!enabled || !video) return
 
-    let handled = false
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const scanner = new QrScanner(
-      video,
-      ({ data }) => {
-        if (handled || !data) return
-        handled = true
-        clearTimeout(timer)
-        scanner.stop()
-        onDecodeRef.current(data)
-      },
-      // 스캔 영역 표시는 화면의 Figma 프레임이 맡는다
-      { preferredCamera: 'environment', highlightScanRegion: false, highlightCodeOutline: false, maxScansPerSecond: 10 },
-    )
-
-    scanner
-      .start()
-      .then(() => {
-        setReady(true)
-        timer = setTimeout(() => {
-          if (handled) return
+    let scanner: QrScanner | null = null
+    let detectTimer: ReturnType<typeof setTimeout> | undefined
+    // 스캐너 생성을 한 틱 미룬다. StrictMode(개발 모드)는 effect 를 생성→정리→생성으로 두 번 실행하는데,
+    // qr-scanner 의 destroy 는 300ms 뒤에 <video> 의 스트림을 끄므로 같은 <video> 에 붙은 새 스트림까지
+    // 꺼 버린다(권한이 이미 허용된 두 번째 스캔부터 카메라가 안 켜짐, #24). 첫 실행은 생성 전에 취소된다.
+    const timer = setTimeout(() => {
+      let handled = false
+      const instance = new QrScanner(
+        video,
+        ({ data }) => {
+          if (handled || !data) return
           handled = true
-          scanner.stop()
-          setFailure({ key: restartKey, error: 'NOT_DETECTED' })
-        }, detectTimeoutMs)
-      })
-      .catch((err: unknown) => {
-        const name = err instanceof DOMException ? err.name : String(err)
-        const error: ScannerError =
-          name === 'NotAllowedError' || name === 'SecurityError'
-            ? 'PERMISSION_DENIED'
-            : name === 'NotFoundError' || /camera not found/i.test(name)
-              ? 'NO_CAMERA'
-              : 'UNKNOWN'
-        setFailure({ key: restartKey, error })
-      })
+          clearTimeout(detectTimer)
+          instance.stop()
+          onDecodeRef.current(data)
+        },
+        // 스캔 영역 표시는 화면의 Figma 프레임이 맡는다
+        { preferredCamera: 'environment', highlightScanRegion: false, highlightCodeOutline: false, maxScansPerSecond: 10 },
+      )
+      scanner = instance
+
+      instance
+        .start()
+        .then(() => {
+          setReady(true)
+          detectTimer = setTimeout(() => {
+            if (handled) return
+            handled = true
+            instance.stop()
+            setFailure({ key: restartKey, error: 'NOT_DETECTED' })
+          }, detectTimeoutMs)
+        })
+        .catch((err: unknown) => {
+          const name = err instanceof DOMException ? err.name : String(err)
+          const error: ScannerError =
+            name === 'NotAllowedError' || name === 'SecurityError'
+              ? 'PERMISSION_DENIED'
+              : name === 'NotFoundError' || /camera not found/i.test(name)
+                ? 'NO_CAMERA'
+                : 'UNKNOWN'
+          setFailure({ key: restartKey, error })
+        })
+    }, 0)
 
     return () => {
       clearTimeout(timer)
-      scanner.destroy()
+      clearTimeout(detectTimer)
+      scanner?.destroy()
       setReady(false)
     }
   }, [enabled, restartKey, detectTimeoutMs])
