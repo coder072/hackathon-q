@@ -114,7 +114,7 @@ IP는 `X-Forwarded-For` 의 첫 번째 값 기준이다 (Vite 프록시·터널�
 - 최대 5회 리디렉션, 전체 5초 제한. 응답 본문은 읽지 않는다.
 - 차단 목록에 걸리면 그 주소에는 접속하지 않고 즉시 10점 처리한다.
 - 등록 도메인은 `tldextract`(내장 공개 접미사 목록, 네트워크 조회 없음), 국제화 도메인은 `idna`(IDNA 2008), 유사 도메인은 `rapidfuzz` 편집 거리로 판단한다.
-- 분석 결과는 `analysis_sessions` 에 저장되어 20분간 `POST /intent-guidance` 에서 사용한다.
+- 분석 결과는 `analysis_sessions` 에 저장된다. `expiresAt`(20분)은 `POST /intent-guidance` 같은 후속 행동의 유효 시간이고, `GET /analyses/{analysisId}` 조회는 기간 제한이 없다.
 - 차단·허용 목록은 관리자 API 없이 `app/catalog/*.json` 을 수정한다.
 - 테스트는 `respx` 로 HTTP 를 가로채고 DNS 는 가짜 Resolver 로 바꿔 네트워크 없이 실행한다.
 
@@ -124,5 +124,5 @@ IP는 `X-Forwarded-For` 의 첫 번째 값 기준이다 (Vite 프록시·터널�
 | --- | --- | --- | --- |
 | GET | `/health` | 서비스 상태 확인 | ✅ |
 | POST | `/analyses` | URL 분석 | ✅ |
-| GET | `/analyses/{analysisId}` | 분석 결과 조회 | TODO |
+| GET | `/analyses/{analysisId}` | 분석 결과 조회 (저장된 결과, 기간 제한 없음) | ✅ |
 | POST | `/intent-guidance` | 접속 의도 분석·공식 사이트 안내 | TODO |

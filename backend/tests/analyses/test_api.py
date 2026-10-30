@@ -276,3 +276,42 @@ def test_rate_limit(client, net, monkeypatch):
     assert analyze(client, "https://www.naver.com/").json()["error"]["code"] == (
         "RATE_LIMIT_EXCEEDED"
     )
+
+
+def test_get_returns_stored_result(client, net):
+    net.add("www.naver.com")
+    created = analyze(client, "http://www.naver.com/?q=1").json()["data"]
+
+    r = client.get(f"/api/v1/analyses/{created['analysisId']}")
+    assert r.status_code == 200
+    assert r.headers["Cache-Control"] == "no-store"
+    assert r.json()["data"] == created
+    # 저장된 결과만 돌려주고 다시 접속하지 않는다
+    assert len(net.requests) == 1
+
+
+def test_get_still_works_after_expires_at(client, net):
+    net.add("naver-event.com")
+    app.dependency_overrides[get_settings] = lambda: Settings(analysis_ttl_minutes=-1)
+    created = analyze(client, "https://naver-event.com/").json()["data"]
+    assert created["expiresAt"] < created["analyzedAt"]
+
+    r = client.get(f"/api/v1/analyses/{created['analysisId']}")
+    assert r.status_code == 200
+    assert r.json()["data"]["analysisId"] == created["analysisId"]
+
+
+@pytest.mark.parametrize(
+    "analysis_id",
+    [
+        "ana_01M678S2BPFJKCZJV985R4Y90B",  # 형식은 맞지만 없는 ID
+        "ana_123",
+        "req_01M678S0VMFAS1W49KACBTRG38",
+        "ana_01M678S2BPFJKCZJV985R4Y90B' OR '1'='1",
+    ],
+)
+def test_get_unknown_or_malformed_id_is_404(client, net, analysis_id):
+    r = client.get(f"/api/v1/analyses/{analysis_id}")
+    assert r.status_code == 404
+    assert r.json()["success"] is False
+    assert r.json()["error"]["code"] == "ANALYSIS_NOT_FOUND"

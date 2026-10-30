@@ -7,6 +7,12 @@ from app.models.analysis_session import AnalysisSession
 from app.schemas.analysis import AnalysisResult
 
 
+def get(db: Session, analysis_id: str) -> AnalysisResult | None:
+    """저장된 분석 결과. 만료(expiresAt)와 관계없이 조회한다."""
+    row = db.get(AnalysisSession, analysis_id)
+    return AnalysisResult.model_validate_json(row.result_json) if row else None
+
+
 def find_by_client_request_id(db: Session, client_request_id: str) -> AnalysisResult | None:
     row = db.scalars(
         select(AnalysisSession).where(
