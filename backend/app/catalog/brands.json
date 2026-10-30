@@ -1,0 +1,21 @@
+[
+  { "keyword": "naver", "domains": ["naver.com", "naver.me", "navercorp.com"] },
+  { "keyword": "kakao", "domains": ["kakao.com", "kakaocorp.com", "kakaobank.com", "kakaopay.com"] },
+  { "keyword": "coupang", "domains": ["coupang.com"] },
+  { "keyword": "toss", "domains": ["toss.im", "tossbank.com"] },
+  { "keyword": "epost", "domains": ["epost.go.kr", "koreapost.go.kr"] },
+  { "keyword": "shinhan", "domains": ["shinhan.com", "shinhancard.com"] },
+  { "keyword": "kbstar", "domains": ["kbstar.com", "kbcard.com"] },
+  { "keyword": "wooribank", "domains": ["wooribank.com"] },
+  { "keyword": "hanabank", "domains": ["hanabank.com"] },
+  { "keyword": "nonghyup", "domains": ["nonghyup.com"] },
+  { "keyword": "samsung", "domains": ["samsung.com", "samsungcard.com"] },
+  { "keyword": "google", "domains": ["google.com", "google.co.kr", "youtube.com"] },
+  { "keyword": "apple", "domains": ["apple.com", "icloud.com"] },
+  { "keyword": "microsoft", "domains": ["microsoft.com", "live.com", "office.com"] },
+  { "keyword": "paypal", "domains": ["paypal.com"] },
+  { "keyword": "amazon", "domains": ["amazon.com", "amazon.co.jp"] },
+  { "keyword": "netflix", "domains": ["netflix.com"] },
+  { "keyword": "instagram", "domains": ["instagram.com"] },
+  { "keyword": "facebook", "domains": ["facebook.com", "fb.com"] }
+]

@@ -2,6 +2,8 @@
 
 export type Verdict = 'SAFE' | 'SUSPICIOUS'
 
+export type RecommendedAction = 'OPEN_ALLOWED' | 'ASK_INTENT' | 'BLOCK'
+
 export type CheckCode =
   | 'HTTPS_NOT_USED'
   | 'LOOKALIKE_DOMAIN'
@@ -69,12 +71,14 @@ export interface AnalysisResult {
   analysisId: string
   verdict: Verdict
   score: number
+  recommendedAction: RecommendedAction
   originalUrl: string
   finalUrl: string
   displayDomain: string
   redirectCount: number
   checks: CheckResult[]
   analyzedAt: string
+  expiresAt: string
 }
 
 // POST /intent-guidance

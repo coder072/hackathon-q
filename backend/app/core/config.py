@@ -16,8 +16,11 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://qr:qr@localhost:5433/qr"
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
 
-    # 분석 요청 제한 (slowapi 형식)
-    analysis_rate_limit: str = "30/minute"
+    # URL 분석 (API 명세 보안 정책)
+    analysis_rate_limit: str = "30/minute"  # slowapi 형식
+    analysis_ttl_minutes: int = 20
+    analysis_timeout_seconds: float = 5.0
+    max_redirects: int = 5
 
     # 분석 세션 행 보관 시간. 앱 실행 중 1시간마다 이보다 오래된 세션을 지운다
     session_retention_hours: int = 24

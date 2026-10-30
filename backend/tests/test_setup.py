@@ -66,6 +66,10 @@ def test_purge_deletes_sessions_older_than_24_hours():
             )
         db.commit()
 
+    # 다른 테스트가 방금 저장한 세션은 24시간이 지나지 않아 남는다
     assert purge_expired_sessions(now) == 1
     with SessionLocal() as db:
-        assert db.scalars(select(AnalysisSession.id)).all() == ["ana_new"]
+        ids = db.scalars(
+            select(AnalysisSession.id).where(AnalysisSession.id.in_(["ana_old", "ana_new"]))
+        ).all()
+    assert ids == ["ana_new"]
