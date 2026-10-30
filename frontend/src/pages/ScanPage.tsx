@@ -28,9 +28,17 @@ export function ScanPage() {
   if (error) {
     return (
       <ErrorView
-        title={error === 'PERMISSION_DENIED' ? '카메라 권한이 필요해요' : '카메라를 사용할 수 없어요'}
+        title={
+          error === 'INSECURE_CONTEXT'
+            ? '안전한 연결이 필요해요'
+            : error === 'PERMISSION_DENIED'
+              ? '카메라 권한이 필요해요'
+              : '카메라를 사용할 수 없어요'
+        }
         message={
-          error === 'PERMISSION_DENIED'
+          error === 'INSECURE_CONTEXT'
+            ? '카메라와 앱 설치 기능을 사용하려면 HTTPS 주소로 접속해 주세요.'
+            : error === 'PERMISSION_DENIED'
             ? '브라우저 설정에서 이 사이트의 카메라 권한을 허용한 뒤 다시 시도해 주세요.'
             : '카메라를 찾지 못했거나 다른 앱이 사용 중이에요.'
         }

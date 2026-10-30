@@ -17,6 +17,20 @@ export function SuggestionsPage() {
   // 서버가 검증한 후보만 표시 (방어적으로 verified 재확인)
   const suggestions = guidance.suggestions.filter((s) => s.verified).slice(0, 3)
 
+  if (guidance.guidanceStatus === 'NEEDS_CLARIFICATION') {
+    return (
+      <ErrorView
+        title="목적을 조금 더 알려 주세요"
+        message={guidance.followUpQuestion ?? '어떤 서비스에서 무엇을 하려는지 함께 입력해 주세요.'}
+      >
+        <Button onClick={() => navigate('/intent', { replace: true })}>다시 입력</Button>
+        <Button variant="secondary" onClick={goHome}>
+          다시 스캔
+        </Button>
+      </ErrorView>
+    )
+  }
+
   if (suggestions.length === 0) {
     return (
       <ErrorView
@@ -33,7 +47,7 @@ export function SuggestionsPage() {
       <div>
         <p className="text-sm text-slate-400">이렇게 이해했어요</p>
         <h1 className="text-xl font-bold">
-          {guidance.serviceName} · {guidance.intentCode}
+          {guidance.serviceName ?? '서비스 미확인'} · {guidance.intentCode ?? '의도 미확인'}
         </h1>
       </div>
 

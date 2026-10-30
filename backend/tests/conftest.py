@@ -7,6 +7,7 @@ from pathlib import Path  # noqa: E402
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
+from app.db.session import engine  # noqa: E402
 from app.main import app  # noqa: E402
 
 
@@ -17,4 +18,5 @@ def client():
 
 
 def pytest_sessionfinish(session, exitstatus):
+    engine.dispose()
     Path("data/test.db").unlink(missing_ok=True)

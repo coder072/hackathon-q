@@ -46,4 +46,5 @@ app/
 | GET | `/health` | 서비스 상태 확인 | ✅ |
 | POST | `/analyses` | URL 분석 | TODO |
 | GET | `/analyses/{analysisId}` | 분석 결과 조회 | TODO |
+| POST | `/intent-guidance` | 4~6점 분석의 서비스명·행동 의도 구조화 | ✅ (INT-001~002) |
 | POST | `/reports` | 피싱 의심 URL 신고 | TODO |

@@ -3,17 +3,19 @@ import { Navigate, useNavigate } from 'react-router'
 import { api } from '../api'
 import { Button, ErrorView } from '../components/ui'
 import { errorMessage } from '../lib/errors'
+import { useOnlineStatus } from '../hooks/useOnlineStatus'
 import { useScanFlow } from '../state/useScanFlow'
 
 // SCR-002 분석 중 화면
 export function AnalyzingPage() {
   const navigate = useNavigate()
   const { scannedUrl, setAnalysis } = useScanFlow()
+  const online = useOnlineStatus()
   const [error, setError] = useState<unknown>(null)
   const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
-    if (!scannedUrl) return
+    if (!scannedUrl || !online) return
     const controller = new AbortController()
 
     api
@@ -29,9 +31,22 @@ export function AnalyzingPage() {
       })
 
     return () => controller.abort()
-  }, [scannedUrl, attempt, navigate, setAnalysis])
+  }, [scannedUrl, online, attempt, navigate, setAnalysis])
 
   if (!scannedUrl) return <Navigate to="/" replace />
+
+  if (!online) {
+    return (
+      <ErrorView
+        title="오프라인에서는 분석할 수 없어요"
+        message="네트워크 연결을 확인해 주세요. 연결되면 안전 판정 없이 분석을 다시 시작합니다."
+      >
+        <Button variant="secondary" onClick={() => navigate('/', { replace: true })}>
+          다시 스캔
+        </Button>
+      </ErrorView>
+    )
+  }
 
   if (error) {
     return (

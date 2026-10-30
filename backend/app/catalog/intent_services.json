@@ -1,0 +1,32 @@
+[
+  {
+    "serviceKey": "naver",
+    "serviceName": "네이버",
+    "aliases": ["네이버", "naver"]
+  },
+  {
+    "serviceKey": "kakao",
+    "serviceName": "카카오",
+    "aliases": ["카카오", "카톡", "kakao"]
+  },
+  {
+    "serviceKey": "coupang",
+    "serviceName": "쿠팡",
+    "aliases": ["쿠팡", "coupang"]
+  },
+  {
+    "serviceKey": "korea_post",
+    "serviceName": "우체국",
+    "aliases": ["우체국", "우체국택배", "epost"]
+  },
+  {
+    "serviceKey": "shinhan_card",
+    "serviceName": "신한카드",
+    "aliases": ["신한카드", "신한 카드"]
+  },
+  {
+    "serviceKey": "kb_bank",
+    "serviceName": "KB국민은행",
+    "aliases": ["국민은행", "kb국민은행", "kb bank"]
+  }
+]

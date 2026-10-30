@@ -1,11 +1,6 @@
-import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { Button } from '../components/ui'
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
-}
+import { useInstallPrompt } from '../hooks/useInstallPrompt'
 
 const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent)
 const isStandalone = window.matchMedia('(display-mode: standalone)').matches
@@ -13,16 +8,7 @@ const isStandalone = window.matchMedia('(display-mode: standalone)').matches
 // SCR-008 설치 안내 (PWA-001)
 export function InstallPage() {
   const navigate = useNavigate()
-  const [promptEvent, setPromptEvent] = useState<BeforeInstallPromptEvent | null>(null)
-
-  useEffect(() => {
-    const handler = (e: Event) => {
-      e.preventDefault()
-      setPromptEvent(e as BeforeInstallPromptEvent)
-    }
-    window.addEventListener('beforeinstallprompt', handler)
-    return () => window.removeEventListener('beforeinstallprompt', handler)
-  }, [])
+  const { promptEvent, promptInstall } = useInstallPrompt()
 
   return (
     <div className="flex flex-1 flex-col gap-4 py-6">
@@ -30,7 +16,7 @@ export function InstallPage() {
       {isStandalone ? (
         <p className="text-slate-300">✅ 이미 앱으로 실행 중이에요.</p>
       ) : promptEvent ? (
-        <Button onClick={() => promptEvent.prompt()}>앱 설치</Button>
+        <Button onClick={promptInstall}>앱 설치</Button>
       ) : isIos ? (
         <ol className="list-decimal space-y-2 pl-5 text-slate-300">
           <li>Safari 하단의 공유 버튼(⬆️)을 누르세요.</li>

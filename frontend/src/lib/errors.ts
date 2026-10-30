@@ -13,6 +13,10 @@ const MESSAGES: Partial<Record<ErrorCode, string>> = {
   ANALYSIS_FAILED: '분석 중 오류가 발생했어요. 안전 여부를 확인하지 못했으니 링크를 열지 마세요.',
   ANALYSIS_TIMEOUT: '분석 시간이 초과됐어요. 다시 시도해 주세요.',
   ANALYSIS_NOT_FOUND: '분석 결과가 만료됐어요. QR을 다시 스캔해 주세요.',
+  INVALID_INTENT_MESSAGE: '접속 목적을 1~300자로 입력해 주세요.',
+  INTENT_GUIDANCE_NOT_ALLOWED: '이 분석 결과에서는 접속 목적을 확인할 수 없어요. 원래 링크는 계속 차단됩니다.',
+  SENSITIVE_DATA_DETECTED: '민감정보로 보이는 값은 전송하지 않았어요. 해당 내용을 지우고 목적만 입력해 주세요.',
+  INTENT_SERVICE_UNAVAILABLE: '목적 분석 서비스를 사용할 수 없어요. 원래 링크는 계속 차단됩니다.',
   INTENT_NOT_UNDERSTOOD: '목적을 이해하지 못했어요. 원래 링크는 계속 차단됩니다.',
   OFFICIAL_SITE_NOT_FOUND: '확인된 공식 사이트가 없어요. QR을 제공한 곳에 직접 확인해 주세요.',
 }

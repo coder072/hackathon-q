@@ -14,13 +14,16 @@ export default defineConfig(({ mode }) => {
       // PWA-001 홈 화면 설치, PWA-002 앱 셸 캐시
       VitePWA({
         registerType: 'autoUpdate',
+        injectRegister: null,
         includeAssets: ['favicon.ico', 'icon.svg', 'apple-touch-icon-180x180.png'],
         manifest: {
+          id: '/',
           name: 'QR 안심스캔',
           short_name: '안심스캔',
           description: 'QR 코드 속 링크를 열기 전에 피싱 여부를 확인합니다.',
           lang: 'ko',
           start_url: '/',
+          scope: '/',
           display: 'standalone',
           orientation: 'portrait',
           background_color: '#0f172a',
@@ -33,6 +36,9 @@ export default defineConfig(({ mode }) => {
           ],
         },
         workbox: {
+          cleanupOutdatedCaches: true,
+          clientsClaim: true,
+          skipWaiting: true,
           globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
           navigateFallback: '/index.html',
           // 분석 API 응답은 캐시하지 않는다 (오프라인에서 안전 판정 금지, PWA-004)

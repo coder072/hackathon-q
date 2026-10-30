@@ -43,6 +43,8 @@ export type ErrorCode =
   | 'INVALID_REPORT_REASON'
   | 'INVALID_INTENT_MESSAGE'
   | 'INTENT_GUIDANCE_NOT_ALLOWED'
+  | 'SENSITIVE_DATA_DETECTED'
+  | 'INTENT_SERVICE_UNAVAILABLE'
   | 'INTENT_NOT_UNDERSTOOD'
   | 'OFFICIAL_SITE_NOT_FOUND'
   // 클라이언트 전용: 네트워크 단절, 응답 파싱 실패
@@ -92,10 +94,14 @@ export interface OfficialSiteSuggestion {
 }
 
 export interface IntentGuidance {
-  intentCode: string
-  serviceName: string
+  analysisId: string
+  guidanceStatus: 'MATCHED' | 'NEEDS_CLARIFICATION' | 'NOT_FOUND'
+  intentCode: string | null
+  serviceKey: string | null
+  serviceName: string | null
   confidence: number
-  questionRequired: boolean
+  followUpQuestion: string | null
+  additionalKeywords: string[]
   suggestions: OfficialSiteSuggestion[]
 }
 
