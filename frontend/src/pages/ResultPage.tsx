@@ -6,10 +6,10 @@ import { ResultScreen } from '../components/ResultScreen'
 import { Button, ErrorView, LoadingView } from '../components/ui'
 import { useAnalysis } from '../hooks/useAnalysis'
 import { errorMessage } from '../lib/errors'
-import { riskTier } from '../lib/verdict'
+import { resultTier } from '../lib/verdict'
 import { useScanFlow } from '../state/useScanFlow'
 
-// SCR-003 안전 결과(0~3점) / SCR-004 주의 결과(4~6점, AI 2차 검증 후)·차단 결과(7~10점)
+// SCR-003 안전 결과(0~3점) / SCR-004 주의 결과(4~6점, AI 2차 검증 후)·차단 결과(7~10점, 또는 4~6점 중 사칭 판정)
 export function ResultPage() {
   const navigate = useNavigate()
   const { analysisId } = useParams()
@@ -31,8 +31,8 @@ export function ResultPage() {
   }
   if (!analysis) return <LoadingView title="분석 결과를 불러오고 있어요" />
 
-  const tier = riskTier(analysis)
   const currentGuidance = guidance?.analysisId === analysis.analysisId ? guidance : null
+  const tier = resultTier(analysis, currentGuidance)
   const toIntent = () => navigate(`/intent/${encodeURIComponent(analysis.analysisId)}`)
   // RST-005: 명시적 버튼 선택 시에만 링크를 연다. 4~6점·7~10점은 원본 링크를 열지 않는다.
   const openLink = () => window.open(analysis.finalUrl, '_blank', 'noopener,noreferrer')
@@ -57,8 +57,11 @@ export function ResultPage() {
       onPrimaryAction={actions[tier].primary}
       onSecondaryAction={actions[tier].secondary}
       secondaryLabel={actions[tier].secondaryLabel}
+      // 4~6점이 AI 2차 검증에서 사칭으로 판단돼 차단된 경우
+      scoreCaption={tier === 'HIGH' && analysis.recommendedAction === 'ASK_INTENT' ? 'AI 확인 결과 사칭이 의심돼 차단했어요' : undefined}
     >
-      {tier === 'AMBIGUOUS' && currentGuidance && <GuidanceCard guidance={currentGuidance} />}
+      {/* AI 2차 검증 결과: 주의면 공식 사이트 안내, 사칭으로 차단됐으면 판단 근거와 진짜 공식 사이트 */}
+      {tier !== 'SAFE' && currentGuidance && <GuidanceCard guidance={currentGuidance} />}
       {tier === 'HIGH' && reportOpen && <ReportGuide />}
     </ResultScreen>
   )
