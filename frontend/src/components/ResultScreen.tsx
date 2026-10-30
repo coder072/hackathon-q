@@ -9,6 +9,8 @@ const CHECK_TITLES: Partial<Record<CheckCode, string>> = {
   SUSPICIOUS_URL_STRUCTURE: '수상한 주소 구조',
   DIRECT_IP_ACCESS: 'IP 주소 직접 접속',
   EXCESSIVE_REDIRECTS: '과도한 리디렉션',
+  NEW_DOMAIN: '최근 생성된 도메인',
+  SUSPICIOUS_TLD: '피싱에 자주 쓰이는 도메인',
   BLOCKLIST_MATCH: '피싱 차단 목록',
   ALLOWLIST_MATCH: '검증된 공식 도메인',
 }

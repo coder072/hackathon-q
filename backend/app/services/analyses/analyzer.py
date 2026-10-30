@@ -4,18 +4,21 @@ import logging
 import socket
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from urllib.parse import urljoin
 
 import httpx
 
 from app.core.errors import AppError, ErrorCode
 from app.schemas.analysis import CheckResult
-from app.services.analyses.parsing import ParsedUrl, normalize_url
+from app.services.analyses.parsing import ParsedUrl, is_ip_address, normalize_url
+from app.services.analyses.rdap import DomainLookup
 from app.services.analyses.rules import (
     SUSPICIOUS_MIN_SCORE,
     UrlCatalog,
     evaluate,
     matches_domain,
+    registrable_domain,
     total_score,
 )
 
@@ -135,32 +138,92 @@ async def trace_redirects(
         hops.append(normalize_url(urljoin(current.url, location)))
 
 
+def _age_target(host: str, catalog: UrlCatalog) -> str | None:
+    """등록일을 조회할 등록 도메인. IP·공식·차단·단축 URL 도메인은 조회하지 않는다."""
+    if is_ip_address(host):
+        return None
+    if any(
+        matches_domain(host, domains)
+        for domains in (catalog.allowlist, catalog.blocklist, catalog.shorteners)
+    ):
+        return None
+    return registrable_domain(host)
+
+
+async def _domain_age_days(
+    lookup: DomainLookup | None,
+    started: asyncio.Task[datetime | None] | None,
+    started_domain: str | None,
+    domain: str | None,
+    time_left: float,
+) -> int | None:
+    """최종 도메인의 나이(일). 첫 주소와 같은 도메인이면 미리 시작한 조회 결과를 쓴다."""
+    if lookup is None or domain is None or time_left <= 0:
+        return None
+    pending = started if started and domain == started_domain else lookup(domain)
+    try:
+        async with asyncio.timeout(time_left):
+            registered = await pending
+    except TimeoutError:
+        return None
+    if registered is None:
+        return None
+    return max(0, (datetime.now(UTC) - registered).days)
+
+
 async def analyze_url(
     raw_url: str,
     resolve: Resolver,
     catalog: UrlCatalog,
     max_redirects: int,
     timeout: float,
+    lookup: DomainLookup | None = None,
 ) -> AnalysisOutcome:
     start = normalize_url(raw_url)
     loop = asyncio.get_running_loop()
+    began = loop.time()
     # 접속 단계는 전체 제한 시간보다 조금 일찍 끊어, 남은 시간에 확인한 주소로 판정한다
-    deadline = loop.time() + timeout * 0.9
+    deadline = began + timeout * 0.9
+    # 도메인 등록일 조회는 리디렉션 추적과 동시에 시작한다 (#33)
+    start_domain = _age_target(start.host, catalog)
+    started = asyncio.create_task(lookup(start_domain)) if lookup and start_domain else None
     try:
-        async with (
-            asyncio.timeout(timeout),
-            httpx.AsyncClient(timeout=timeout, follow_redirects=False, trust_env=False) as client,
-        ):
-            trace = await trace_redirects(start, client, resolve, catalog, max_redirects, deadline)
-    except TimeoutError as exc:
-        raise AppError(ErrorCode.ANALYSIS_TIMEOUT) from exc
-    hops, blocked = trace.hops, trace.blocked
+        try:
+            async with (
+                asyncio.timeout(timeout),
+                httpx.AsyncClient(
+                    timeout=timeout, follow_redirects=False, trust_env=False
+                ) as client,
+            ):
+                trace = await trace_redirects(
+                    start, client, resolve, catalog, max_redirects, deadline
+                )
+        except TimeoutError as exc:
+            raise AppError(ErrorCode.ANALYSIS_TIMEOUT) from exc
+        hops, blocked = trace.hops, trace.blocked
 
-    # URL-004: 단축 URL 은 최종 목적지로 판정한다. 목적지를 끝내 확인하지 못하면 판정하지 않는다.
-    if not blocked and matches_domain(hops[-1].host, catalog.shorteners):
-        raise AppError(ErrorCode.ANALYSIS_FAILED, "단축 URL의 최종 목적지를 확인하지 못했습니다.")
+        # URL-004: 단축 URL 은 최종 목적지로 판정한다.
+        # 목적지를 끝내 확인하지 못하면 판정하지 않는다.
+        if not blocked and matches_domain(hops[-1].host, catalog.shorteners):
+            raise AppError(
+                ErrorCode.ANALYSIS_FAILED, "단축 URL의 최종 목적지를 확인하지 못했습니다."
+            )
 
-    checks = evaluate(hops, blocked, catalog, unreachable=trace.unreachable is not None)
+        final_domain = None if blocked else _age_target(hops[-1].host, catalog)
+        age_days = await _domain_age_days(
+            lookup, started, start_domain, final_domain, began + timeout - loop.time()
+        )
+    finally:
+        if started and not started.done():
+            started.cancel()
+
+    checks = evaluate(
+        hops,
+        blocked,
+        catalog,
+        unreachable=trace.unreachable is not None,
+        domain_age_days=age_days,
+    )
     score = total_score(checks)
     # 접속하지 못했어도 URL 신호만으로 피싱 의심(4점 이상)이면 판정한다. 그보다 낮으면 리디렉션 끝에
     # 위험한 목적지가 있을 수 있어 안전으로 판정하지 않고 오류로 응답한다 (API-AC-03, #26)

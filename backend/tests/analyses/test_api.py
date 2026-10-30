@@ -1,4 +1,5 @@
 import asyncio
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
@@ -14,7 +15,10 @@ from app.models.analysis_session import AnalysisSession
 
 
 class FakeNet:
-    """가짜 DNS(hosts)와 respx 로 가로챈 HTTP 응답(pages). 정하지 않은 페이지는 200 을 돌려준다."""
+    """가짜 DNS(hosts)와 respx 로 가로챈 HTTP 응답(pages). 정하지 않은 페이지는 200 을 돌려준다.
+
+    도메인 등록일(RDAP)은 registered 로 정하고, 정하지 않은 도메인은 조회 실패(None)로 본다.
+    """
 
     def __init__(self, router: respx.Router):
         self.hosts: dict[str, list[str]] = {}
@@ -23,6 +27,9 @@ class FakeNet:
         self.errors: dict[str, Exception] = {}  # URL 별 접속 오류
         self.dns_delay = 0.0
         self.requests: list[httpx.Request] = []
+        self.registered: dict[str, datetime] = {}
+        self.lookup_delay = 0.0
+        self.lookups: list[str] = []
         router.get(url__regex=r".*").mock(side_effect=self._respond)
 
     def add(self, *names: str) -> None:
@@ -46,6 +53,15 @@ class FakeNet:
             raise AppError(ErrorCode.DNS_RESOLUTION_FAILED)
         return self.hosts[host]
 
+    def register(self, domain: str, days_ago: int) -> None:
+        self.registered[domain] = datetime.now(UTC) - timedelta(days=days_ago)
+
+    async def lookup(self, domain: str) -> datetime | None:
+        self.lookups.append(domain)
+        if self.lookup_delay:
+            await asyncio.sleep(self.lookup_delay)
+        return self.registered.get(domain)
+
     def _respond(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
         if self.error:
@@ -60,6 +76,7 @@ class FakeNet:
 def net(respx_mock):
     fake = FakeNet(respx_mock)
     app.dependency_overrides[analyses.get_resolver] = lambda: fake.resolve
+    app.dependency_overrides[analyses.get_domain_lookup] = lambda: fake.lookup
     limiter.reset()
     yield fake
     app.dependency_overrides.clear()
@@ -89,7 +106,10 @@ def test_official_site_is_safe(client, net):
     assert data["redirectCount"] == 0
     assert data["expiresAt"] > data["analyzedAt"]
     assert detected(r.json()) == {"ALLOWLIST_MATCH"}
-    assert len(data["checks"]) == 7
+    assert len(data["checks"]) == 9
+    # 공식 도메인은 등록일을 조회하지 않는다
+    assert net.lookups == []
+    assert check(r.json(), "NEW_DOMAIN")["message"].startswith("검증된 공식 도메인이라")
 
 
 def test_connects_to_verified_ip_with_original_host_and_sni(client, net):
@@ -147,6 +167,63 @@ def test_blocklisted_url_is_10_without_network(client, net):
     assert (data["score"], data["recommendedAction"]) == (10, "BLOCK")
     assert "BLOCKLIST_MATCH" in detected(r.json())
     assert net.requests == []
+    assert net.lookups == []
+
+
+def check(body, code):
+    return next(c for c in body["data"]["checks"] if c["code"] == code)
+
+
+def test_new_domain_with_suspicious_tld_asks_intent(client, net):
+    # URL 모양이 평범한 피싱 주소: 신규 도메인(2) + 위험 TLD(1) + 의심 키워드(1) = 4 (#33)
+    net.add("event-gift.shop")
+    net.register("event-gift.shop", days_ago=3)
+    body = analyze(client, "https://event-gift.shop/login/verify").json()
+
+    assert (body["data"]["score"], body["data"]["recommendedAction"]) == (4, "ASK_INTENT")
+    assert detected(body) == {"NEW_DOMAIN", "SUSPICIOUS_TLD", "SUSPICIOUS_URL_STRUCTURE"}
+    assert check(body, "NEW_DOMAIN")["message"] == "생성된 지 3일 된 신규 도메인입니다."
+    assert check(body, "SUSPICIOUS_TLD")["score"] == 1
+
+
+def test_old_domain_is_not_new(client, net):
+    net.add("www.example.com")
+    net.register("example.com", days_ago=400)
+    body = analyze(client, "https://www.example.com/").json()
+
+    assert net.lookups == ["example.com"]
+    assert body["data"]["score"] == 0
+    assert check(body, "NEW_DOMAIN")["message"] == "생성된 지 400일이 지난 도메인입니다."
+
+
+def test_unknown_domain_age_adds_no_score(client, net):
+    net.add("example.com")
+    body = analyze(client, "https://example.com/").json()
+
+    assert body["data"]["score"] == 0
+    assert check(body, "NEW_DOMAIN")["message"] == "도메인 생성일을 확인하지 못했습니다."
+
+
+def test_domain_age_uses_final_domain_after_redirect(client, net):
+    net.add("old-site.com", "fresh-site.com")
+    net.register("old-site.com", days_ago=1000)
+    net.register("fresh-site.com", days_ago=1)
+    net.redirect("https://old-site.com/", "https://fresh-site.com/")
+    body = analyze(client, "https://old-site.com/").json()
+
+    # 첫 주소로 미리 시작한 조회는 버리고 최종 도메인으로 판정한다
+    assert net.lookups[-1] == "fresh-site.com"
+    assert "NEW_DOMAIN" in detected(body)
+
+
+def test_slow_domain_lookup_does_not_block_analysis(client, net):
+    net.add("example.com")
+    net.lookup_delay = 1
+    app.dependency_overrides[get_settings] = lambda: Settings(analysis_timeout_seconds=0.1)
+    r = analyze(client, "https://example.com/")
+
+    assert r.status_code == 200
+    assert "NEW_DOMAIN" not in detected(r.json())
 
 
 def test_blocklist_reached_through_redirect(client, net):

@@ -10,6 +10,8 @@ export type CheckCode =
   | 'SUSPICIOUS_URL_STRUCTURE'
   | 'DIRECT_IP_ACCESS'
   | 'EXCESSIVE_REDIRECTS'
+  | 'NEW_DOMAIN'
+  | 'SUSPICIOUS_TLD'
   // 명세 MVP 표에는 없지만 현재 백엔드가 함께 내려준다
   | 'BLOCKLIST_MATCH'
   | 'ALLOWLIST_MATCH'
