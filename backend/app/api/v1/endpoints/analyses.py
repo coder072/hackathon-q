@@ -1,8 +1,9 @@
 import logging
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Path, Request, Response
 
 from app.api.deps import AppSettings, DbSession
 from app.core.config import get_settings
@@ -17,6 +18,9 @@ from app.services.analyses.rules import load_catalog
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["analyses"])
+
+# ana_ + ULID(Crockford Base32 26자)
+ANALYSIS_ID = re.compile(r"ana_[0-9A-HJKMNP-TV-Z]{26}")
 
 
 def get_resolver() -> Resolver:
@@ -87,3 +91,27 @@ async def create_analysis(
     )
     analysis_sessions.save(db, result, body.client_request_id)
     return ApiResponse(data=result, request_id=request_id)
+
+
+@router.get(
+    "/analyses/{analysisId}",
+    response_model=ApiResponse[AnalysisResult],
+    response_model_by_alias=True,
+)
+@limiter.limit(lambda: get_settings().analysis_rate_limit)
+async def get_analysis(
+    analysis_id: Annotated[str, Path(alias="analysisId")],
+    request: Request,
+    response: Response,
+    db: DbSession,
+) -> ApiResponse[AnalysisResult]:
+    """저장된 분석 결과를 그대로 돌려준다. 다시 분석하거나 외부에 접속하지 않는다.
+
+    expiresAt 은 /intent-guidance 같은 후속 행동의 유효 시간이고, 결과 조회는 기간 제한이 없다.
+    """
+    response.headers["Cache-Control"] = "no-store"
+    # 형식이 맞지 않는 ID 는 DB 를 조회하지 않고 바로 404 로 응답한다
+    result = analysis_sessions.get(db, analysis_id) if ANALYSIS_ID.fullmatch(analysis_id) else None
+    if result is None:
+        raise AppError(ErrorCode.ANALYSIS_NOT_FOUND, "분석 결과를 찾을 수 없습니다.")
+    return ApiResponse(data=result, request_id=request.state.request_id)
