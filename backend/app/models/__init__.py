@@ -1,5 +1,1 @@
-from app.models.analysis import Analysis
-from app.models.lists import AllowlistEntry, BlocklistEntry
-from app.models.report import Report
-
-__all__ = ["Analysis", "Report", "BlocklistEntry", "AllowlistEntry"]
+# 도메인 모델을 추가하면 여기서 import 해서 init_db() 의 create_all 에 등록한다.

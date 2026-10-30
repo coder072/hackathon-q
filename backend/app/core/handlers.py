@@ -32,11 +32,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             {"field": ".".join(str(p) for p in err["loc"] if p != "body"), "reason": err["msg"]}
             for err in exc.errors()
         ]
-        # 신고 사유 열거형 오류는 명세상 422 INVALID_REPORT_REASON
-        if any(d["field"] == "reason" for d in details) and request.url.path.endswith("/reports"):
-            code = ErrorCode.INVALID_REPORT_REASON
-        else:
-            code = ErrorCode.INVALID_REQUEST
+        code = ErrorCode.INVALID_REQUEST
         status, message = ERROR_SPECS[code]
         return JSONResponse(
             status_code=status, content=_error_body(request, code, message, details)
