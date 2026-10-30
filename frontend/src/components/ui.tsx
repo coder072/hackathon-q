@@ -38,6 +38,19 @@ export function StatusBadge({ tone, icon, children }: { tone: 'safe' | 'danger' 
   )
 }
 
+export function LoadingView({ title, message, children }: { title: string; message?: string; children?: ReactNode }) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-6 py-8 text-center">
+      <div className="size-12 animate-spin rounded-full border-4 border-slate-700 border-t-emerald-400" aria-hidden />
+      <div role="status">
+        <p className="text-lg font-semibold">{title}</p>
+        {message && <p className="mt-1 text-sm text-slate-400">{message}</p>}
+      </div>
+      {children}
+    </div>
+  )
+}
+
 export function ErrorView({ title, message, children }: { title: string; message: string; children?: ReactNode }) {
   return (
     <div className="flex flex-1 flex-col justify-center gap-6 py-8">

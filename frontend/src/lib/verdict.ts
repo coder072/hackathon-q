@@ -1,12 +1,23 @@
-import type { AnalysisResult } from '../api'
+import type { AnalysisResult, RecommendedAction } from '../api'
 
-// 명세 5. 위험 점수 기준
+// 명세 "위험 점수" 기준: 0~3 OPEN_ALLOWED, 4~6 ASK_INTENT, 7~10 BLOCK
 export type RiskTier = 'SAFE' | 'AMBIGUOUS' | 'HIGH'
 
-export function riskTier({ verdict, score }: Pick<AnalysisResult, 'verdict' | 'score'>): RiskTier {
-  if (verdict === 'SAFE') return 'SAFE'
-  // RST-006: 4~6점은 의도 확인 대상, 7~10점(차단 목록 포함)은 강한 경고
-  return score <= 6 ? 'AMBIGUOUS' : 'HIGH'
+const TIERS: Record<RecommendedAction, RiskTier> = {
+  OPEN_ALLOWED: 'SAFE',
+  ASK_INTENT: 'AMBIGUOUS',
+  BLOCK: 'HIGH',
+}
+
+// 점수 구간을 다시 계산하지 않고 서버가 정한 권장 행동을 따른다. 모르는 값은 차단으로 본다.
+export function riskTier({ recommendedAction }: Pick<AnalysisResult, 'recommendedAction'>): RiskTier {
+  return TIERS[recommendedAction] ?? 'HIGH'
+}
+
+// 분석 직후 이동할 화면: 4~6점은 결과 대신 목적 입력으로 보낸다
+export function nextPath(analysis: AnalysisResult): string {
+  const id = encodeURIComponent(analysis.analysisId)
+  return riskTier(analysis) === 'AMBIGUOUS' ? `/intent/${id}` : `/result/${id}`
 }
 
 export function isHttpUrl(text: string): boolean {
