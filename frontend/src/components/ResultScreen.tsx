@@ -18,7 +18,7 @@ interface VariantConfig {
   scoreLabel: string
   scoreCaption: string
   accentColor: string
-  glowRgb: string
+  glow: string
   evidenceTitle: string
   advice: string
   adviceNote: string
@@ -34,7 +34,7 @@ const VARIANTS: Record<RiskTier, VariantConfig> = {
     scoreLabel: '안전 · 낮은 위험 신호',
     scoreCaption: '30점 이상은 주의가 필요해요',
     accentColor: '#3b82f6',
-    glowRgb: '59,130,246',
+    glow: 'radial-gradient(closest-side, rgba(224,242,255,0.95) 0%, rgba(96,165,250,0.85) 26%, rgba(37,99,235,0.7) 52%, rgba(30,27,75,0.45) 72%, rgba(10,10,20,0) 88%)',
     evidenceTitle: '확인한 점',
     advice: '낮은 점수가 안전을 보장하진 않아요.\n정보를 입력하기 전 출처를 확인하세요.',
     adviceNote: '주소 문자열을 분석한 결과예요.\n실제 페이지나 운영자를 확인한 것은 아니에요.',
@@ -47,7 +47,7 @@ const VARIANTS: Record<RiskTier, VariantConfig> = {
     scoreLabel: '위험 신호 점수',
     scoreCaption: '30점 이상은 주의가 필요해요',
     accentColor: '#f5c842',
-    glowRgb: '245,200,66',
+    glow: 'radial-gradient(closest-side, rgba(255,246,214,0.95) 0%, rgba(250,204,21,0.85) 24%, rgba(234,88,12,0.7) 50%, rgba(124,45,18,0.5) 72%, rgba(10,10,20,0) 88%)',
     evidenceTitle: '살펴볼 신호',
     advice: '로그인·카드 정보를 요구할 수 있어요.\n입력 전 출처를 따로 확인하세요.',
     adviceNote: '주소에서 확인한 신호의 결과이며\n실제 페이지의 요청을 확인한 것은 아니에요.',
@@ -61,7 +61,7 @@ const VARIANTS: Record<RiskTier, VariantConfig> = {
     scoreLabel: '차단 판정',
     scoreCaption: '위험 신호가 높아 자동으로 차단됐어요',
     accentColor: '#ff5a1f',
-    glowRgb: '255,90,31',
+    glow: 'radial-gradient(closest-side, rgba(255,241,168,0.95) 0%, rgba(255,138,30,0.88) 22%, rgba(220,38,38,0.75) 48%, rgba(127,29,29,0.55) 70%, rgba(10,10,20,0) 88%)',
     evidenceTitle: '살펴볼 신호',
     advice: '로그인·카드 정보를 요구할 수 있어요.\n입력 전 출처를 따로 확인하세요.',
     adviceNote: '주소에서 확인한 신호의 결과이며\n실제 페이지의 요청을 확인한 것은 아니에요.',
@@ -146,10 +146,7 @@ export function ResultScreen({ analysis, tier, onBack, onClose, onPrimaryAction,
   return (
     <div ref={containerRef} className="-mx-4 relative flex-1 overflow-hidden bg-[#1b1c1d]">
       <div aria-hidden className="result-glow-wrap">
-        <div
-          className="result-glow"
-          style={{ background: `radial-gradient(closest-side, rgba(${v.glowRgb},0.55), rgba(${v.glowRgb},0) 70%)` }}
-        />
+        <div className="result-glow" style={{ background: v.glow }} />
       </div>
 
       <nav className="absolute inset-x-0 top-0 z-20 flex h-11 items-center justify-between px-6 pt-3">
