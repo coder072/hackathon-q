@@ -44,6 +44,7 @@ def test_parses_structured_output_and_sends_catalog_enum():
     completions = FakeCompletions(
         reply(
             {
+                "siteIds": ["naver.2", "evil.1", "naver.2", "naver.1"],
                 "serviceKey": "naver",
                 "intentCode": "SERVICE_LOGIN",
                 "confidence": 1.7,
@@ -57,6 +58,8 @@ def test_parses_structured_output_and_sends_catalog_enum():
     )
     result = run(classifier(completions).classify("네이버 로그인", context))
     assert (result.matches_intent, result.explanation) == (False, "네이버가 아닌 주소예요.")
+    # 카탈로그 밖 ID 는 버리고 중복은 한 번만
+    assert result.site_ids == ("naver.2", "naver.1")
 
     assert (result.service_key, result.intent_code, result.source) == (
         "naver",
@@ -80,7 +83,7 @@ def test_parses_structured_output_and_sends_catalog_enum():
 
 def test_none_means_unknown():
     completions = FakeCompletions(
-        reply({"serviceKey": "NONE", "intentCode": "NONE", "confidence": 0})
+        reply({"siteIds": [], "serviceKey": "NONE", "intentCode": "NONE", "confidence": 0})
     )
     result = run(classifier(completions).classify("모르겠어요"))
     assert (result.service_key, result.intent_code) == (None, None)

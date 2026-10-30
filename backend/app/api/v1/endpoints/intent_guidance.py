@@ -14,6 +14,7 @@ from app.models.analysis_session import AnalysisSession
 from app.schemas.analysis import AnalysisResult, RecommendedAction
 from app.schemas.common import ApiResponse
 from app.schemas.intent import IntentAssessment, IntentGuidance, IntentGuidanceRequest
+from app.services.analyses.rules import find_lookalike_brand, load_catalog
 from app.services.intent.assessment import AnalysisContext
 from app.services.intent.catalog import load_official_sites
 from app.services.intent.guidance import IntentClassifier, build_guidance
@@ -73,7 +74,6 @@ async def create_intent_guidance(
     response.headers["Cache-Control"] = "no-store"
     # API-AC-04: 4~6점(ASK_INTENT)이고 20분이 지나지 않은 분석에서만 허용한다
     session = _ask_intent_session(db, body.analysis_id)
-    context = AnalysisContext.from_result(AnalysisResult.model_validate_json(session.result_json))
 
     message = body.user_message.strip()
     if not message or len(message) > MAX_MESSAGE_LENGTH:
@@ -83,6 +83,11 @@ async def create_intent_guidance(
         raise AppError(ErrorCode.SENSITIVE_DATA_DETECTED)
 
     catalog = load_official_sites()
+    analysis = AnalysisResult.model_validate_json(session.result_json)
+    # QR 도메인이 흉내 낸 서비스 (예: naver.github.io → 네이버). 목적이 모호할 때 안내 대상이 된다
+    brand = find_lookalike_brand(analysis.display_domain, load_catalog())
+    imitated = catalog.service_by_brand(brand)
+    context = AnalysisContext.from_result(analysis, imitated.key if imitated else None)
     guidance = await build_guidance(message, catalog, classifier, context)
     result = guidance.classification
     service = catalog.service(result.service_key)
@@ -94,7 +99,8 @@ async def create_intent_guidance(
             service_key=result.service_key,
             service_name=service.name if service else None,
             confidence=result.confidence,
-            follow_up_question=guidance.follow_up_question,
+            # 질문은 한 번으로 끝낸다 (#30). 응답 형식 호환을 위해 필드만 남긴다
+            follow_up_question=None,
             assessment=IntentAssessment(
                 matches_intent=guidance.assessment.matches_intent,
                 explanation=guidance.assessment.explanation,

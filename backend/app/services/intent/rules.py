@@ -13,6 +13,8 @@ class Classification:
     # LLM 이 QR 링크와 사용자 의도를 비교한 판단. 규칙 기반은 비워 두고 서버가 채운다
     matches_intent: bool | None = None
     explanation: str | None = None
+    # LLM 이 고른 공식 사이트 ID (카탈로그 밖 ID 는 서버가 버린다)
+    site_ids: tuple[str, ...] = ()
 
 
 def _normalize(value: str) -> str:

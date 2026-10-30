@@ -124,22 +124,52 @@ def test_llm_failure_falls_back_to_rules(client, llm):
 
 
 @pytest.mark.parametrize(
-    ("result", "message", "question_part"),
+    ("result", "domain", "names"),
     [
-        (Classification("naver", None, 0.5, "llm"), "네이버", "네이버에서"),
-        (Classification(None, "SERVICE_LOGIN", 0.5, "llm"), "로그인", "로그인을 하려고"),
-        (Classification(None, "DELIVERY_TRACKING", 0.5, "llm"), "택배", "배송 조회를 하려고"),
-        (Classification(None, None, 0.0, "llm"), "그냥 찍어봤어요", "예: 우체국"),
+        # 서비스만 알면 그 서비스의 공식 홈과 대표 페이지
+        (
+            Classification("naver", None, 0.5, "llm"),
+            "naver.github.io",
+            ["네이버", "네이버 로그인", "네이버 고객센터"],
+        ),
+        # 행동만 알면 그 행동의 대표 서비스들
+        (
+            Classification(None, "DELIVERY_TRACKING", 0.5, "llm"),
+            "naver.github.io",
+            ["우체국 배송조회", "CJ대한통운", "한진택배"],
+        ),
+        # 둘 다 모르면 QR 도메인이 흉내 낸 서비스
+        (
+            Classification(None, None, 0.0, "llm"),
+            "naver.github.io",
+            ["네이버", "네이버 로그인", "네이버 고객센터"],
+        ),
     ],
 )
-def test_incomplete_intent_asks_follow_up(client, llm, result, message, question_part):
+def test_one_question_always_guides_best_sites(client, llm, result, domain, names):
     llm.result = result
-    r = guide(client, session(), message)
-    assert r.status_code == 200
-    data = r.json()["data"]
-    assert data["guidanceStatus"] == "NEEDS_CLARIFICATION"
-    assert question_part in data["followUpQuestion"]
+    data = guide(client, session(domain=domain), "그냥요").json()["data"]
+    assert data["guidanceStatus"] == "MATCHED"
+    assert data["followUpQuestion"] is None
+    assert [s["name"] for s in data["suggestions"]] == names
+
+
+def test_nothing_known_and_no_imitation_is_not_found(client, llm):
+    llm.result = Classification(None, None, 0.0, "llm")
+    data = guide(client, session(domain="plain-host.com"), "그냥요").json()["data"]
+    assert data["guidanceStatus"] == "NOT_FOUND"
     assert data["suggestions"] == []
+    assert data["followUpQuestion"] is None
+
+
+def test_llm_picked_sites_are_used_and_unknown_ids_dropped(client, llm):
+    llm.result = Classification(
+        "cj_logistics", "DELIVERY_TRACKING", 0.9, "llm", site_ids=("cj_logistics.1", "korea_post.1")
+    )
+    data = guide(client, session(), "CJ 택배 조회").json()["data"]
+    assert [s["name"] for s in data["suggestions"]] == ["CJ대한통운", "우체국 배송조회"]
+    # LLM 에는 흉내 낸 서비스도 함께 넘긴다
+    assert llm.contexts[0].impersonated_service == "naver"
 
 
 @pytest.mark.parametrize(

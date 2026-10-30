@@ -2,8 +2,8 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from app.schemas.intent import GuidanceStatus, OfficialSiteSuggestion
-from app.services.intent.assessment import AnalysisContext, Assessment, _object_particle, assess
-from app.services.intent.catalog import OfficialSiteCatalog
+from app.services.intent.assessment import AnalysisContext, Assessment, assess
+from app.services.intent.catalog import MAX_SUGGESTIONS, OfficialSite, OfficialSiteCatalog
 from app.services.intent.rules import Classification, classify_by_rules
 
 
@@ -17,7 +17,6 @@ class IntentClassifier(Protocol):
 class Guidance:
     status: GuidanceStatus
     classification: Classification
-    follow_up_question: str | None
     suggestions: list[OfficialSiteSuggestion]
     assessment: Assessment
 
@@ -28,22 +27,31 @@ async def classify(
     llm: IntentClassifier | None,
     context: AnalysisContext | None = None,
 ) -> Classification:
-    """LLM 으로 먼저 분류하고, 실패하거나 아무것도 못 찾으면 규칙 기반으로 대체한다."""
-    rules = classify_by_rules(message, catalog)
+    """LLM 으로 먼저 판단하고, 실패하면 규칙 기반으로 대체한다."""
     result = await llm.classify(message, context) if llm else None
-    if result is None:
-        return rules
-    found = (result.service_key is not None) + (result.intent_code is not None)
-    found_by_rules = (rules.service_key is not None) + (rules.intent_code is not None)
-    return rules if found_by_rules > found else result
+    return result if result is not None else classify_by_rules(message, catalog)
 
 
-def _follow_up(service_name: str | None, intent_name: str | None) -> str:
-    if service_name and not intent_name:
-        return f"{service_name}에서 로그인, 배송 조회, 결제 중 어떤 일을 하려고 하셨나요?"
-    if intent_name and not service_name:
-        return f"어느 서비스에서 {intent_name}{_object_particle(intent_name)} 하려고 하셨나요?"
-    return "어떤 서비스에서 무엇을 하려고 하셨는지 함께 알려 주세요. 예: 우체국 택배 배송 조회"
+def _pick_sites(
+    result: Classification, catalog: OfficialSiteCatalog, context: AnalysisContext
+) -> list[OfficialSite]:
+    """질문 한 번으로 끝내기 위해 가장 알맞은 공식 사이트를 고른다 (#30).
+
+    1. LLM 이 고른 사이트 (카탈로그에 있는 ID 만)
+    2. 서비스를 알면 그 서비스의 의도 페이지·공식 홈
+    3. 행동만 알면 그 행동의 대표 서비스들 (예: 배송 조회 → 우체국·CJ대한통운·한진)
+    4. 둘 다 모르면 QR 도메인이 흉내 낸 서비스
+    """
+    llm_sites = [s for s in map(catalog.site, result.site_ids) if s is not None]
+    if llm_sites:
+        return llm_sites[:MAX_SUGGESTIONS]
+    if result.service_key:
+        return catalog.sites_for(result.service_key, result.intent_code)
+    if result.intent_code:
+        return catalog.sites_for_intent(result.intent_code)
+    if context.impersonated_service:
+        return catalog.sites_for(context.impersonated_service, None)
+    return []
 
 
 async def build_guidance(
@@ -52,11 +60,9 @@ async def build_guidance(
     llm: IntentClassifier | None,
     context: AnalysisContext,
 ) -> Guidance:
-    """의도 분류 + QR 링크 판단, 공식 사이트는 카탈로그에서만 찾는다 (INT-003·004, RST-008·010)."""
+    """사용자 목적 한 번으로 공식 사이트를 안내한다. 추가 질문은 하지 않는다 (INT-003·004)."""
     result = await classify(message, catalog, llm, context)
     service = catalog.service(result.service_key)
-    intent = catalog.intent(result.intent_code)
-    # 규칙 기반 결과로 대체된 경우 AI 설명은 다른 분류에 대한 것이므로 쓰지 않는다
     llm_judged = result.source == "llm"
     assessment = assess(
         service,
@@ -66,28 +72,12 @@ async def build_guidance(
         catalog,
     )
 
-    if service is None or intent is None:
-        return Guidance(
-            status=GuidanceStatus.NEEDS_CLARIFICATION,
-            classification=result,
-            follow_up_question=_follow_up(
-                service.name if service else None, intent.name if intent else None
-            ),
-            suggestions=[],
-            assessment=assessment,
-        )
-
-    sites = catalog.sites_for(service.key, intent.code)
     suggestions = [
         OfficialSiteSuggestion(name=s.name, url=s.url, domain=s.domain, reason=s.reason)
-        for s in sites
+        for s in _pick_sites(result, catalog, context)
     ]
     # 후보가 없으면 오류 대신 NOT_FOUND 로 응답하고, 원래 링크는 계속 차단한다
     status = GuidanceStatus.MATCHED if suggestions else GuidanceStatus.NOT_FOUND
     return Guidance(
-        status=status,
-        classification=result,
-        follow_up_question=None,
-        suggestions=suggestions,
-        assessment=assessment,
+        status=status, classification=result, suggestions=suggestions, assessment=assessment
     )

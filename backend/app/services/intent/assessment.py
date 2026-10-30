@@ -30,14 +30,19 @@ class AnalysisContext:
     score: int
     redirect_count: int
     findings: tuple[str, ...]  # 탐지된 검사의 사용자용 근거 문장
+    # QR 도메인이 흉내 낸 것으로 보이는 카탈로그 서비스 키 (예: naver.github.io → naver)
+    impersonated_service: str | None = None
 
     @classmethod
-    def from_result(cls, result: AnalysisResult) -> "AnalysisContext":
+    def from_result(
+        cls, result: AnalysisResult, impersonated_service: str | None = None
+    ) -> "AnalysisContext":
         return cls(
             domain=result.display_domain,
             score=result.score,
             redirect_count=result.redirect_count,
             findings=tuple(c.message for c in result.checks if c.detected and c.score > 0),
+            impersonated_service=impersonated_service,
         )
 
 
