@@ -41,10 +41,14 @@ export default defineConfig(({ mode }) => {
       }),
     ],
     server: {
+      // 휴대폰 테스트: Cloudflare Tunnel / ngrok 으로 이 개발 서버(HTTPS)에 접속한다
+      allowedHosts: ['.trycloudflare.com', '.ngrok-free.app', '.ngrok.app'],
       proxy: {
         '/api': {
           target: env.VITE_PROXY_TARGET || 'http://localhost:8000',
           changeOrigin: true,
+          // 백엔드 요청 제한이 사용자별 IP(X-Forwarded-For)를 볼 수 있게 한다
+          xfwd: true,
         },
       },
     },

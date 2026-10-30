@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -9,7 +11,8 @@ from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.handlers import register_exception_handlers
 from app.core.middleware import RequestIdMiddleware
-from app.db.session import init_db
+from app.core.rate_limit import limiter
+from app.jobs.purge_sessions import run_periodically
 
 settings = get_settings()
 logging.basicConfig(level=logging.DEBUG if settings.debug else logging.INFO)
@@ -17,11 +20,16 @@ logging.basicConfig(level=logging.DEBUG if settings.debug else logging.INFO)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    init_db()
+    purge_task = asyncio.create_task(run_periodically())
     yield
+    purge_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await purge_task
 
 
+# 스키마는 Alembic 마이그레이션으로 관리한다 (실행 전 alembic upgrade head)
 app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
+app.state.limiter = limiter
 
 app.add_middleware(RequestIdMiddleware)
 app.add_middleware(

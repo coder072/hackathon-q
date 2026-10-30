@@ -12,8 +12,19 @@ class Settings(BaseSettings):
     app_version: str = "1.0.0"
     debug: bool = False
 
-    database_url: str = "sqlite:///./data/app.db"
+    # 로컬 PostgreSQL (docker compose up db). pytest 는 기본으로 SQLite 를 쓴다
+    database_url: str = "postgresql+psycopg://qr:qr@localhost:5433/qr"
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
+
+    # 분석 요청 제한 (slowapi 형식)
+    analysis_rate_limit: str = "30/minute"
+
+    # 분석 세션 행 보관 시간. 앱 실행 중 1시간마다 이보다 오래된 세션을 지운다
+    session_retention_hours: int = 24
+
+    # 의도 분류 LLM (4~6점 분석의 POST /intent-guidance 에서만 호출)
+    anthropic_api_key: str | None = None
+    intent_model: str = "claude-haiku-4-5"
 
     @field_validator("cors_origins", mode="before")
     @classmethod

@@ -1,0 +1,45 @@
+# 로컬 실행: docker compose up --build  (PostgreSQL + 백엔드)
+# 백엔드를 venv 로 직접 실행할 때는 DB 만: docker compose up db
+# 프론트는 frontend 에서 npm run dev (Vite 가 /api 를 localhost:8000 으로 프록시한다)
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: qr
+      POSTGRES_PASSWORD: qr
+      POSTGRES_DB: qr
+    ports:
+      # 이미 설치된 PostgreSQL(5432)과 겹치지 않도록 호스트에는 5433 으로 연다
+      - "5433:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qr -d qr"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://qr:qr@db:5432/qr
+    volumes:
+      # 소스를 연결해 코드 변경이 바로 반영되게 한다
+      - ./backend:/app
+      - /app/.venv
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  db-data:
