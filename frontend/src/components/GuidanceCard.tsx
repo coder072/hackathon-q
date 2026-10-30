@@ -6,10 +6,19 @@ export function GuidanceCard({ guidance }: { guidance: IntentGuidance }) {
   const suggestions =
     guidance.guidanceStatus === 'MATCHED' ? guidance.suggestions.filter((s) => s.verified).slice(0, 3) : []
 
+  // AI 2차 검증: QR 링크가 사용자가 말한 목적과 맞는지에 대한 판단
+  const assessment = guidance.assessment?.explanation && (
+    <div className="flex flex-col gap-1 rounded-[22px] bg-[#f4f4f4] p-4">
+      <p className="text-sm text-[#62656a]">AI 2차 검증</p>
+      <p className="text-[17px] leading-[1.45] font-medium text-[#101112]">{guidance.assessment.explanation}</p>
+    </div>
+  )
+
   if (suggestions.length === 0) {
     return (
-      <div className="flex flex-col gap-2 rounded-[36px] bg-white p-6">
+      <div className="flex flex-col gap-4 rounded-[36px] bg-white p-6">
         <p className="text-2xl font-semibold tracking-[-1px] text-[#101112]">공식 사이트를 찾지 못했어요</p>
+        {assessment}
         <p className="text-[17px] leading-[1.45] text-[#62656a]">
           원래 링크는 계속 차단돼요. QR을 붙여 둔 곳이나 서비스 고객센터에 직접 확인해 주세요.
         </p>
@@ -25,6 +34,7 @@ export function GuidanceCard({ guidance }: { guidance: IntentGuidance }) {
           {guidance.serviceName ? `${guidance.serviceName} 공식 사이트` : '검증된 공식 사이트'}
         </p>
       </div>
+      {assessment}
 
       <ul className="flex flex-col gap-4">
         {suggestions.map((s) => (

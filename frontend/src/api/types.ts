@@ -93,8 +93,16 @@ export interface OfficialSiteSuggestion {
   verified: true
 }
 
+// QR 링크와 사용자 의도를 비교한 AI 2차 검증 결과 (명세 이후 백엔드에 추가된 필드)
+export interface IntentAssessment {
+  matchesIntent: boolean | null
+  explanation: string
+  source: 'llm' | 'rules'
+}
+
 export interface IntentGuidance {
   analysisId: string
+  assessment?: IntentAssessment
   guidanceStatus: GuidanceStatus
   intentCode: string | null
   serviceKey: string | null
