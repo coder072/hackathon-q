@@ -1,0 +1,7 @@
+fastapi[standard]>=0.115
+pydantic>=2.12
+pydantic-settings>=2.6
+sqlalchemy>=2.0.36
+httpx>=0.28
+python-ulid>=3.0
+tldextract>=5.1
