@@ -196,6 +196,14 @@ def test_old_domain_is_not_new(client, net):
     assert check(body, "NEW_DOMAIN")["message"] == "생성된 지 400일이 지난 도메인입니다."
 
 
+@pytest.mark.parametrize(("days_ago", "is_new"), [(9, True), (10, False)])
+def test_new_domain_threshold_is_10_days(client, net, days_ago, is_new):
+    net.add("example.com")
+    net.register("example.com", days_ago=days_ago)
+    body = analyze(client, "https://example.com/").json()
+    assert ("NEW_DOMAIN" in detected(body)) is is_new
+
+
 def test_unknown_domain_age_adds_no_score(client, net):
     net.add("example.com")
     body = analyze(client, "https://example.com/").json()

@@ -123,7 +123,7 @@ IP는 `X-Forwarded-For` 의 첫 번째 값 기준이다 (Vite 프록시·터널�
 | `BLOCKLIST_MATCH` | 10 (즉시 최고점) | `catalog/blocklist.json` |
 | `LOOKALIKE_DOMAIN` | 4 | 공식 도메인이 아닌데 `catalog/brands.json` 의 브랜드를 흉내 냄 |
 | `DIRECT_IP_ACCESS` | 3 | 한 단계라도 IP 주소로 접속 |
-| `NEW_DOMAIN` | 2 | 최종 도메인이 등록된 지 30일 미만 (RDAP) |
+| `NEW_DOMAIN` | 2 | 최종 도메인이 등록된 지 10일 미만 (RDAP) |
 | `HTTPS_NOT_USED` | 1 | 최종 주소가 HTTP |
 | `SUSPICIOUS_URL_STRUCTURE` | 1 | `@`, 150자 초과, `xn--`, 하위 도메인 3단계 이상, 하이픈 3개 이상, 의심 키워드 2개 이상 |
 | `SUSPICIOUS_TLD` | 1 | 최종 도메인이 `catalog/suspicious_tlds.json` 의 TLD (`.xyz`, `.top`, `.shop` 등) |
