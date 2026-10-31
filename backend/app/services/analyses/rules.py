@@ -33,7 +33,7 @@ EXCESSIVE_REDIRECT_COUNT = 3
 LONG_URL_LENGTH = 150
 MAX_SUBDOMAIN_DEPTH = 3
 # 등록된 지 이 일수 미만이면 NEW_DOMAIN
-NEW_DOMAIN_DAYS = 30
+NEW_DOMAIN_DAYS = 10
 SUSPICIOUS_KEYWORDS = (
     "login", "signin", "logon", "verify", "verification", "secure", "account", "update",
     "confirm", "password", "wallet", "banking", "auth", "unlock", "suspend",
